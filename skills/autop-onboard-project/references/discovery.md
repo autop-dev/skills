@@ -328,7 +328,8 @@ key, display name, environment or branch name outside letters, digits, spaces an
 string, prints as `<withheld>`, and a `${{ … }}` expression as
 `<expression>`; ask for those. A key may be quoted (`'jobs':`,
 `"environment":`). Read job keys, job names and environment names (plain, quoted,
-an inline `{name: …}` map, or `name:` anywhere in an `environment:` block)
+an inline `{name: …}` map, or a `name:` field directly under an `environment:`
+block, never a line inside another field's value or a nested map)
 with:
 
 ```sh
@@ -346,7 +347,7 @@ BEGIN { q = sprintf("%c", 39) }
   if (match(l, "^(\"[^\"]*\"|" q "[^" q "]*" q ")[[:space:]]*:")) { k = substr(l, 2, RLENGTH - 1); sub("[\"" q "][[:space:]]*:$", "", k); l = k ":" substr(l, RLENGTH + 1) } }
 i == 0 { j = (l ~ /^jobs:[[:space:]]*(#.*)?$/); ji = pi = ei = -1; next }
 !j { next }
-ei >= 0 && i > ei { if (l ~ /^name:/) print NR ": environment " clean(substr(l, 6)); next }
+ei >= 0 && i > ei { if (ec < 0) ec = i; if (i == ec && l ~ /^name:/) print NR ": environment " clean(substr(l, 6)); next }
 { ei = -1 }
 ji < 0 { ji = i }
 i == ji { if (l ~ /^[A-Za-z0-9_-]+:[[:space:]]*(#.*)?$/) { sub(/:.*/, "", l); print NR ": job " clean(l) }; pi = -1; next }
@@ -355,7 +356,7 @@ i != pi { next }
 l ~ /^name:/ { print NR ": name " clean(substr(l, 6)); next }
 l !~ /^environment:/ { next }
 { v = clean(substr(l, 13)) }
-v == "<withheld>" && substr(l, 13) ~ /^[[:space:]]*(#.*)?$/ { ei = i; next }
+v == "<withheld>" && substr(l, 13) ~ /^[[:space:]]*(#.*)?$/ { ei = i; ec = -1; next }
 v == "<withheld>" && match(l, "[{,][[:space:]]*[\"" q "]?name[\"" q "]?[[:space:]]*:[^,}]*") { v = substr(l, RSTART, RLENGTH); sub("^[{,][[:space:]]*[\"" q "]?name[\"" q "]?[[:space:]]*:", "", v); v = clean(v) }
 { print NR ": environment " v }' <file>
 ```
@@ -546,16 +547,12 @@ For `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
 `pubspec.yaml` and `*.csproj` (list them with
 `git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`
 through the guard), print only the table names they contain. A line holding
-a URL (`://`) is not read, and a name holding a known token prefix or a
-long mixed-case or hex string prints as `<withheld>`:
+a URL (`://`) and a `#` or `//` comment are not read, and the command prints
+only the package names of its own list, never the rest of a line:
 
 ```sh
-p='stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?'
-grep -hv '://' -- <files> | grep -oiE "(^|[^a-z])($p)([^a-z]|$)" | grep -oiE "$p" | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
-  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
-    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
-  return 0 }
-{ print (risky($0) ? "<withheld>" : $0) }' | sort -u
+p='stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg|psycopg2|psycopg2-binary|pg|lib/pq|asyncpg|pgx|npgsql|mysql|mysql2|mysqlclient|mysql-connector|mysql-connector-python|pymysql|pymongo|mongodb|mongoose|mongo|motor|redis|ioredis|sqlite|sqlite3'
+grep -hv '://' -- <files> | sed -E 's/(^|[[:space:]])(#|\/\/).*//' | grep -oiE "(^|[^a-z])($p)([^a-z]|$)" | grep -oiE "$p" | tr "[:upper:]" "[:lower:]" | sort -u
 ```
 
 Match a package by its name, without version or extras:

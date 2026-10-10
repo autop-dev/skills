@@ -200,6 +200,19 @@ class WorkflowTest(unittest.TestCase):
                     'job inline', 'environment preview', 'job plain', 'environment review'])
                 self.assertNotIn('secret', result.stdout)
 
+    def test_environment_block_reads_direct_name_fields_only(self):
+        """FR-013: a `name:` line inside a block scalar or a nested map is never read as an environment."""
+        workflow = ('jobs:\n  deploy:\n    environment:\n      url: |\n        https://deploy.example.com\n'
+                    '        name: block-scalar-secret\n      name: production\n      extra:\n'
+                    '        name: nested-invented\n  folded:\n    environment:\n      url: >-\n'
+                    '        name: folded-scalar-secret\n      name: staging\n')
+        result = on_file(JOBS, workflow)
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        self.assertEqual(result.stdout.splitlines(), ['2: job deploy', '7: environment production', '10: job folded',
+                                                      '14: environment staging'])
+        for value in ('secret', 'invented'):
+            self.assertNotIn(value, result.stdout)
+
     def test_any_indentation(self):
         result = on_file(JOBS, FOUR_SPACE)
         self.assertEqual(result.stdout.splitlines(), ['3: job deploy', '6: environment production'])
@@ -438,18 +451,21 @@ volumes:
                 self.assertNotIn(value, result.stdout)
 
     def test_dependency_names_are_masked(self):
-        """FR-013: a URL line is never read, and a matched name holding a credential is withheld."""
+        """FR-013: URL lines and comments are never read, and only the command's own package names print."""
         with tempfile.TemporaryDirectory() as tmp:
             requirements, gomod = Path(tmp) / 'requirements.txt', Path(tmp) / 'go.mod'
             requirements.write_text(
                 '--index-url https://user:psycopg-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9@pypi.example.com/simple\n'
                 '--extra-index-url https://user:redis-short-secret@pypi.example.com/simple\n'
-                'psycopg[binary]>=3\nsentry-sdk==2.0\n# mysql-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9\n')
-            gomod.write_text('module example.com/app\nrequire github.com/stripe/stripe-go/v76 v76.0.0\n')
+                'psycopg[binary]>=3\nsentry-sdk==2.0\n# mysql-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9\n'
+                '# MYSQL_PASSWORD=mysql-prod-password\nmysqlclient==2.2  # pinned for mongo-comment-secret\n'
+                'pymysqlx==1.0\n')
+            gomod.write_text('module example.com/app\n'
+                             'require github.com/stripe/stripe-go/v76 v76.0.0 // redis-go-comment-secret\n')
             result = run(DEPENDENCIES.replace('<files>', f'{shlex.quote(str(requirements))} {shlex.quote(str(gomod))}'))
             self.assertEqual((result.returncode, result.stderr), (0, ''))
-            self.assertEqual(sorted(result.stdout.splitlines()), ['<withheld>', 'psycopg', 'sentry', 'stripe'])
-            for value in ('Ab1Cd2', 'secret', 'redis', 'pypi'):
+            self.assertEqual(sorted(result.stdout.splitlines()), ['mysqlclient', 'psycopg', 'sentry', 'stripe'])
+            for value in ('Ab1Cd2', 'secret', 'redis', 'pypi', 'prod', 'password', 'mongo', 'pymysql'):
                 self.assertNotIn(value, result.stdout)
 
     def test_option_like_paths_are_never_options(self):
