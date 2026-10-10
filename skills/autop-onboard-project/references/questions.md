@@ -58,8 +58,9 @@ token prefix such as `ghp_`, `github_pat_`, `sk-`, `AKIA`, `AIza`, `xox`,
 `eyJ`; a private key; a long mixed-case or hex string; a password); a value
 from an environment file or a `NAME=value` pair; a URL with user
 information (`@` after `://`), a query string (`?`) or a fragment (`#`). A
-`?` anywhere in a front matter value fails the skills repository's check,
-so a question mark in a purpose is rephrased too. Never repeat the refused
+`?` anywhere in a front matter value fails the skills repository's profile
+check (`.github/check.py` applied to a written profile), so a question mark
+in a purpose is rephrased too. Never repeat the refused
 value. Say this one line and ask the same question again:
 
 > That can't go in the profile: no credentials, no environment values, no
@@ -72,7 +73,9 @@ person may volunteer one.
 ## The `## Branches and delivery` section of AGENTS.md
 
 At most ten lines, heading included, filled from the answers. One deploy
-line per target, at most three; more targets → "see the profile".
+line per target, at most three; more targets → "see the profile". With
+`ci.system: none` the CI line reads "CI: none."; with no deploy target the
+deploy line reads "Deploy: nothing is deployed.".
 
 ```markdown
 ## Branches and delivery
@@ -84,8 +87,9 @@ line per target, at most three; more targets → "see the profile".
 ```
 
 `AGENTS.md` absent → create it with this section only. A section with this
-exact heading → replace it in place, from the heading to the next `## `
-heading or the end of the file; nothing else in the file changes.
+exact heading → replace it in place, from the heading to the next `# ` or
+`## ` heading outside a code fence, or the end of the file; nothing else in
+the file changes.
 Otherwise append it at the end, after one blank line. The link resolves
 once the control repository's pull request merges.
 
@@ -98,8 +102,12 @@ once the control repository's pull request merges.
   factual prose sections, from the new answers.
 - **Kept verbatim:** the `## Notes` text (a new answer to question 10 is
   appended below it, replacing a lone "Nothing recorded."); front matter
-  keys the contract does not name, copied from the stored file unchanged,
-  after the known keys of their mapping, without printing them.
+  keys the contract does not name, after the known keys of their mapping.
+  Copy both from the stored text held in the variable Step 1 filled, with a
+  script, never by printing the file. An unknown key the filter printed as
+  `<withheld>` is dropped, not copied, and named in the write list; a Notes
+  line the filter's credential test would withhold is shown as
+  `<withheld>` in Step 3 and the person is asked to remove it.
 - **`updated`** is set to today. When nothing else would change, say so
   and ask whether to write at all.
 - A stored profile whose version is not `1` or whose front matter does not
@@ -108,4 +116,6 @@ once the control repository's pull request merges.
   in place.
 - A branch `onboard/profile-<repo>` or `onboard/agents-<repo>` that already
   exists on `origin` (an earlier, unmerged run) → ask: update that branch
-  and its open pull request, or use a new name with a `-2` suffix.
+  and its open pull request (`git worktree add -B <branch> <tmp>
+  origin/<branch>`, apply the new files there, commit, push; no new pull
+  request), or use a new name with a `-2` suffix.

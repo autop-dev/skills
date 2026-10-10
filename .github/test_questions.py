@@ -6,6 +6,7 @@ import unittest
 root = Path(__file__).resolve().parents[1]
 SKILL = root / 'skills/autop-onboard-project'
 DOC = (SKILL / 'references/questions.md').read_text()
+BLOCK = re.search(r'```markdown\n(.*?)\n```', DOC, re.S)
 
 
 class Questions(unittest.TestCase):
@@ -21,7 +22,8 @@ class Questions(unittest.TestCase):
         self.assertEqual([next(i for i, k in enumerate(keys) if f'`{o}' in k) for o in order], list(range(len(order))))
 
     def test_agents_section_template_fits_ten_lines(self):
-        block = re.search(r'```markdown\n(.*?)\n```', DOC, re.S)[1]
+        self.assertIsNotNone(BLOCK, 'no ```markdown template in questions.md')
+        block = BLOCK[1]
         lines = block.splitlines()
         self.assertEqual(lines[0], '## Branches and delivery')
         self.assertLessEqual(len(lines), 10)
@@ -29,7 +31,7 @@ class Questions(unittest.TestCase):
             self.assertIn(needle, block)
 
     def test_rendered_section_has_no_query_or_user_info(self):
-        block = re.search(r'```markdown\n(.*?)\n```', DOC, re.S)[1]
+        block = BLOCK[1]
         for key, value in {'<AP_REPO>': 'acme/acme-autopilot', '<AP default branch>': 'main', '<repo>': 'api'}.items():
             block = block.replace(key, value)
         url = re.search(r'\((https://[^)]+)\)', block)[1]
@@ -39,8 +41,13 @@ class Questions(unittest.TestCase):
         text = ' '.join((SKILL / 'SKILL.md').read_text().split())
         for needle in ('onboard/profile-<repo>', 'onboard/agents-<repo>', 'docs: profile <repo>',
                        'docs: link the project profile', 'gh pr create', 'explicit yes', 'autop-add-issue',
-                       'Never run `autop issue add`', 'references/questions.md'):
+                       'references/questions.md'):
             self.assertIn(needle, text)
+
+    def test_report_names_the_next_step_and_never_files_work(self):
+        report = ' '.join((SKILL / 'SKILL.md').read_text().split('## Report\n', 1)[1].split('\n## ', 1)[0].split())
+        for needle in ('pull request links', 'profile/<repo>.md', '`autop-add-issue`', 'Never run `autop issue add`'):
+            self.assertIn(needle, report)
 
 
 if __name__ == '__main__':

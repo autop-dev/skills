@@ -121,12 +121,12 @@ one-line rule from questions.md, never repeat the value, ask again.
    and delivery`, commit `docs: link the project profile`, a pull request.
    Write nothing before an explicit yes.
 3. **Write** in a temporary worktree per repository (`git fetch origin`,
-   `git worktree add -b <branch> <tmp> origin/<default>`), so no checkout's
+   `git worktree add -B <branch> <tmp> origin/<default>`), so no checkout's
    working tree changes: commit, `git push -u origin <branch>`, `gh pr
    create --base <default> --head <branch>` under the person's login. A
    direct push is `git push origin HEAD:<default>`; rejected → offer the
    branch and pull request. `gh pr create` refused → print
-   `https://github.com/<repo>/compare/<default>...<branch>`. Then remove
+   `https://github.com/<owner>/<name>/compare/<default>...<branch>`. Remove
    the worktrees.
 
 ## Report
