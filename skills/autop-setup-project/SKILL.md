@@ -18,7 +18,7 @@ human actions.
 | Piece | Where | Who does it |
 |---|---|---|
 | Sign-in and a workspace | https://app.autop.dev (GitHub OAuth) | person |
-| Three GitHub Apps installed on the **organisation** that owns the repos: *Autop ATC*, *Autop Coder*, *Autop Reviewer* (the console guides them in that order) | GitHub org settings, via the install links on the console's Organisations page | person (org owner) |
+| Three GitHub Apps installed on the **organisation** that owns the repos: *Autop ATC*, *Autop Coder*, *Autop Reviewer* | GitHub org settings, via the install links on the console's Organisations page | person (org owner) |
 | A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub | person, or this skill with `gh` |
 | A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | created by the console (or by the person from the console's prefilled link); this skill fills it |
 | Every product repo and the control repo covered by all three App installations | GitHub, via the console's per-App settings links for any repo an App lacks | person |
@@ -61,11 +61,12 @@ Report the table above with ✓ / ✗ per row before changing anything.
 
 Show the person the list of writes and get a yes.
 
-- **Control repo.** Fill the existing one; do not create it by default. The console
-  creates `<slug>-autopilot` when the person creates the project (Step 3), or
-  offers a prefilled GitHub link for it. If Step 1 found none, skip this
-  bullet and the control repo's labels until it exists, then come back. Only
-  when the person says they prefer the manual route, offer
+- **Control repo.** Fill the existing one; do not create it by default. The
+  console's project form offers to create `<slug>-autopilot` for the person,
+  or a prefilled GitHub link for it (Step 3). If Step 1 found none, skip this
+  bullet and the control repo's labels until it exists; when the person comes
+  back, list and confirm those writes before doing them. Only when the
+  person says they prefer the manual route, offer
   `gh repo create <ORG>/<name> --private` with the name they confirm.
   Add an `AGENTS.md` that names the organisation, the board URL
   (`https://github.com/orgs/<ORG>/projects/<N>`), the product repos with one
@@ -101,16 +102,17 @@ link:
    path). "Only select repositories" covers only the repos chosen, so every
    product repo must be selected in all three, and a control repo created
    later must be added to each App that lacks it (the strict path).
-2. Create the project: organisation, board, control repo, product repos.
-   For the control repo use **Create `<slug>-autopilot` for me** (`<slug>`
-   is the project's slug). When the console offers only the prefilled GitHub
-   link, the organisation has not yet accepted Autop ATC's updated
-   permissions: either accept them from the settings link the console shows,
-   which turns on the offer, or create the repo from the prefilled link.
-   Check the agent routes (which profile implements, reviews, repairs) and
-   the merge policy. If the control repo did not exist before, come back to
-   this skill as soon as it does, before filing any work, so it can be
-   filled and labelled (Step 2).
+2. Create the project (organisation, board, control repo, product repos)
+   and check its agent routes (which profile implements, reviews, repairs)
+   and merge policy. For the control repo, pick the existing one if Step 1
+   found it; otherwise use **Create `<slug>-autopilot` for me** (`<slug>` is
+   the project's slug). When the form offers only the prefilled GitHub link,
+   create the repo from it, or, if the form says Autop ATC's updated
+   permissions are not yet accepted, accept them from the settings link it
+   shows to turn on the offer. A new control repo is empty: come back to
+   this skill as soon as it exists, before filing any work, so it can be
+   filled and labelled (Step 2); if the board already holds `autop` work in
+   `Todo`, pause the project until then.
 3. If the project starts paused ("waiting for App access to the control
    repository"), add the control repo to each App from the settings links
    the project page shows. The project activates by itself once all three
