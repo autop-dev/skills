@@ -71,6 +71,30 @@ while IFS= read -r f; do d=$(CDPATH= cd -- "$(dirname -- "$f")" 2>/dev/null && p
 done
 ```
 
+## Product repository
+
+Read the product repository (SKILL.md Step 1 item 1) with the command
+below; never print the remote URL or `gh repo view` as returned. It keeps
+only `<owner>/<name>` from `origin`, the user information, query string,
+fragment and `.git` dropped, and prints `origin <withheld>` instead when
+that is not a GitHub-style `owner/name` or holds a known token prefix or a
+long mixed-case or hex string (ask for the repository then). `gh repo view`
+prints the repository, `organization` and `fork` as `true`/`false`, and the
+default branch, masked like a branch name ("Branches"). A `<withheld>`
+default branch: ask, and leave `DEFAULT` empty.
+
+```sh
+r=$(git remote get-url origin 2>/dev/null | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ sub(/[?#].*/, ""); sub(/^[a-z+]+:\/\/[^\/]*\//, ""); sub(/^[^\/:]*:/, ""); sub(/\/+$/, ""); sub(/\.git$/, "") }
+NR == 1 && /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/ && !risky($0) { print }')
+echo "origin ${r:-<withheld>}"
+[ -n "$r" ] && gh repo view "$r" --json nameWithOwner,isInOrganization,isFork,defaultBranchRef --jq 'def safe(p): if type == "string" and test(p) and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end;
+  "repo \(.nameWithOwner | safe("^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$"))", "organization \(.isInOrganization == true)", "fork \(.isFork == true)", "default \(.defaultBranchRef.name? // "" | safe("^[A-Za-z0-9_./-]+$"))"'
+```
+
 ## Control repository
 
 List the checkouts that can be `$AP` (SKILL.md Step 1 item 2) with the
@@ -189,16 +213,32 @@ n == d || n ~ /^(main|master|develop|development|staging|production)$/ { print "
 n ~ /^(release|hotfix)\/./ { p = n; sub(/\/.*/, "", p); print "branch " p "/" clean(substr(n, length(p) + 2)) }'
 ```
 - **Model rule**, first match wins:
-  1. `develop` or `development` exists: `git-flow`. That branch is
+  1. Only the default branch exists (whatever its name, `production` or
+     `develop` included): `trunk`, and `release = develop = default`.
+  2. `develop` or `development` exists: `git-flow`. That branch is
      `develop`. `release` is `main`, else `master`, else the default
      branch.
-  2. `release/*` exists: `release-branches`, with
+  3. `release/*` exists: `release-branches`, with
      `release_pattern: "release/*"`.
-  3. `production` exists, or `main` and `master` both exist: `other`, with
-     `production` or the non-default one of the pair proposed as `release`
-     and the default as `develop`.
-  4. Otherwise (for example the default branch alone, or with `staging` or
+  4. `production` exists and is not the default, or `main` and `master`
+     both exist: `other`, with `production` or the non-default one of the
+     pair proposed as `release` and the default as `develop`.
+  5. Otherwise (for example the default branch with `staging` or
      `hotfix/*`): `trunk`, and `release = develop = default`.
+
+Apply it to the output of the command above with the command below,
+which prints the proposals in the `key: value` form of `checkout` ("The
+evidence table"):
+
+```sh
+awk '$1 == "default" { d = $2; next } $1 == "branch" { b[$2]; if ($2 != d) n++; if ($2 ~ /^release\//) r = 1 }
+END { if (!n) { m = "trunk"; rel = dev = d } else if ("develop" in b || "development" in b) { m = "git-flow"; dev = "develop" in b ? "develop" : "development"
+    rel = "main" in b ? "main" : "master" in b ? "master" : d } else if (r) m = "release-branches"
+  else if ("production" in b && d != "production" || "main" in b && "master" in b) { m = "other"; dev = d
+    rel = "production" in b && d != "production" ? "production" : d == "main" ? "master" : "main" } else { m = "trunk"; rel = dev = d }
+  print "branches.model: " m; if (rel != "") print "branches.release: " rel; if (dev != "") print "branches.develop: " dev
+  if (m == "release-branches") print "branches.release_pattern: release/*" }'
+```
 
 ## CI and deploy files
 
@@ -221,9 +261,15 @@ and
 If files from several CI systems are present, list them all and ask which
 one gates pull requests. Gates are the job names under `jobs:` of the
 workflows triggered by `pull_request` (not deploy, release or scheduled
-jobs); `gh api repos/$REPO/rules/branches/<default>` and
-`gh api repos/$REPO/branches/<default>/protection/required_status_checks`
-show required checks when the login can read them. For another CI system, list its job or stage
+jobs). The required checks, when the login can read them, come from the
+two commands below, never printed as returned: each prints check names only,
+and a name outside letters, digits, spaces and `_ . / * + ! ( ) , : -`,
+holding `://`, a known token prefix or a long mixed-case or hex string,
+prints as `<withheld>`:
+`gh api repos/$REPO/rules/branches/<default> --jq 'def safe: if test("^[A-Za-z0-9_./*+!(),: -]+$") and (test("://|(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; .[] | select(.type == "required_status_checks") | .parameters.required_status_checks[]?.context | safe'`
+and
+`gh api repos/$REPO/branches/<default>/protection/required_status_checks --jq 'def safe: if test("^[A-Za-z0-9_./*+!(),: -]+$") and (test("://|(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; [.contexts[]?, .checks[]?.context] | unique[] | safe'`.
+For another CI system, list its job or stage
 names and ask for the gates and trigger. The two GitHub Actions commands
 below follow the file's own indentation and print nothing but names. A job
 key, display name, environment or branch name outside letters, digits, spaces and
@@ -483,11 +529,14 @@ git grep -hE '^[[:space:]]*provider[[:space:]]*=' -- <files> | sed -E 's/^[[:spa
 
 ## Environment key names
 
-Open only tracked example files; a name that starts with `secrets` or
+Open only the example files, tracked or untracked (an untracked file that
+`.gitignore` excludes is not listed); a name that starts with `secrets` or
 `credentials` stays forbidden. Find them with
-`git ls-files -- '*.env.example' '*.env.sample' '*.env.template' '*.env.dist'`
+`git ls-files -co --exclude-standard -- '*.env.example' '*.env.sample' '*.env.template' '*.env.dist'`
 and pass the list through the guard. For each path it printed, print key
-names only, never a value, with the command below. A value that
+names only, never a value, with the command below. A key name holding a
+known token prefix or a long mixed-case or hex string prints as
+`<withheld>`. A value that
 opens a quote (`"`, `'` or a backtick) and does not close it on the same
 line runs on until the closing quote, and none of its lines is read as a
 key:
@@ -497,7 +546,9 @@ awk 'function closes(v, c) { if (c == "\"") gsub(/\\./, "", v); return index(v, 
 { sub(/\r$/, "") }
 q != "" { if (closes($0, q)) q = ""; next }
 match($0, /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/) {
-  k = substr($0, 1, RLENGTH - 1); sub(/^[[:space:]]*(export[[:space:]]+)?/, "", k); sub(/[[:space:]]+$/, "", k); print k
+  k = substr($0, 1, RLENGTH - 1); sub(/^[[:space:]]*(export[[:space:]]+)?/, "", k); sub(/[[:space:]]+$/, "", k)
+  w = k ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|xox[abprs]-|AKIA|AIza|eyJ)/ || length(k) >= 24 && k ~ /[0-9]/ && k ~ /[a-z]/ && k ~ /[A-Z]/ || length(k) >= 32 && k ~ /^[0-9A-Fa-f]+$/
+  print (w ? "<withheld>" : k)
   v = substr($0, RLENGTH + 1); sub(/^[[:space:]]+/, "", v); c = substr(v, 1, 1)
   if ((c == "\"" || c == sprintf("%c", 39) || c == "`") && !closes(substr(v, 2), c)) q = c }' <file>
 ```

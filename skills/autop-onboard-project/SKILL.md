@@ -43,10 +43,12 @@ accepts, placed next to the product checkout, never inside it).
 `git status --porcelain` reads the same before and after.
 
 1. **`gh` and the product repository.** `gh auth status` must show a login.
-   In the checkout, take `<owner>/<name>` from
-   `git remote get-url origin | sed -E 's#//[^/@]*@#//#'` (user info, which
-   can hold a token, is stripped; SSH and HTTPS remotes are both valid); `gh repo view <owner>/<name>
-   --json nameWithOwner,isInOrganization,isFork,defaultBranchRef` gives
+   In the checkout, read `origin` and `gh repo view` only through the
+   command in [references/discovery.md](references/discovery.md) "Product
+   repository", never printed whole: it keeps `<owner>/<name>` alone from
+   the remote URL (user info, query string and fragment, which can hold a
+   token, are dropped; SSH and HTTPS remotes are both valid) and masks a
+   credential-looking repository or default branch name. It gives
    `REPO=<org>/<repo>` and the default branch. A fork → ask for the
    organisation repository's checkout. Not a git checkout → ask for
    the product repository's path. `isInOrganization` false → say the

@@ -48,12 +48,16 @@ PROFILE_OFFLINE = inline('p=$(git -C "$AP" show')
 CONTROL = fenced('want=$(')
 MERGE = fenced("printf '%s\\n' \"$defaults\"")
 FIREBASE = inline("jq -r 'def safe:")
-ENV_FILES = inline("git ls-files -- '*.env.example'")
+ENV_FILES = inline("git ls-files -co --exclude-standard -- '*.env.example'")
 ENV_NAMES = fenced("awk 'function closes(")
 PRISMA = fenced("git grep -hE '^[[:space:]]*provider")
 GUARD = fenced('while IFS= read -r f;')
 MANIFESTS = inline("git ls-files -- ':(exclude).github/*'")
 GH_ENVIRONMENTS = inline('gh api repos/$REPO/environments --jq ')
+GH_RULES = inline('gh api repos/$REPO/rules/branches/<default> --jq ')
+GH_PROTECTION = inline('gh api repos/$REPO/branches/<default>/protection/required_status_checks --jq ')
+PRODUCT = fenced('r=$(git remote get-url origin')
+MODEL = fenced("awk '$1 == \"default\"")
 PACKAGE_JSON, COMPOSER_JSON = fenced("jq -r 'def safe:").splitlines()
 
 WORKFLOW = """\
@@ -151,6 +155,30 @@ class WorkflowTest(unittest.TestCase):
                          ['production', 'Preview 2', '<withheld>', '<withheld>', '<withheld>', '<withheld>'])
         self.assertNotIn('Credential', result.stdout)
         self.assertNotIn('secret', result.stdout)
+
+    @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
+    def test_required_check_names_are_masked(self):
+        """FR-013: the two required-check `gh api … --jq` filters, run by jq on recorded responses."""
+        rules = ('[{"type":"pull_request","parameters":{"required_approving_review_count":1}},'
+                 '{"type":"required_status_checks","ruleset_source":"acme/api","parameters":{'
+                 '"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"lint"},'
+                 '{"context":"ci / test (ubuntu-latest, 3.12)","integration_id":15368},{"context":"ghp_ruleCredential"},'
+                 '{"context":"deploy https://user:rule-url-secret@example.com"},{"context":"TOKEN=rule-value-secret"}]}}]')
+        protection = ('{"url":"https://api.github.com/repos/acme/api/branches/main/protection/required_status_checks",'
+                      '"strict":true,"contexts":["lint","Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9","https://example.com/?sig=ctx-secret"],'
+                      '"checks":[{"context":"lint","app_id":1},{"context":"test","app_id":null},'
+                      '{"context":"0123456789abcdef0123456789abcdef","app_id":2}]}')
+        for api, response, expected in (
+                (GH_RULES, rules, ['lint', 'ci / test (ubuntu-latest, 3.12)', '<withheld>', '<withheld>', '<withheld>']),
+                (GH_PROTECTION, protection, ['<withheld>', '<withheld>', '<withheld>', 'lint', 'test'])):
+            with self.subTest(api=api.split(' --jq', 1)[0]):
+                command = re.sub(r'^gh api \S+ --jq', 'jq -r', api) + ' <file>'
+                self.assertNotEqual(command, api + ' <file>')
+                result = on_file(command, response, 'response.json')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines(), expected)
+                for value in ('Credential', 'secret', 'Ab1Cd2', '0123'):
+                    self.assertNotIn(value, result.stdout)
 
     def test_any_indentation(self):
         result = on_file(JOBS, FOUR_SPACE)
@@ -519,6 +547,89 @@ class BranchesTest(unittest.TestCase):
             self.assertNotIn('Credential', '\n'.join(out))
 
 
+class ModelRuleTest(unittest.TestCase):
+    """FR-009: the model rule on the branches command's output; trunk when only the default exists."""
+
+    def model(self, *lines):
+        result = run(f"printf '%s\\n' {' '.join(shlex.quote(line) for line in lines)} | {MODEL}")
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        return result.stdout.splitlines()
+
+    def test_only_the_default_is_trunk_whatever_its_name(self):
+        for name in ('main', 'production', 'develop', 'master'):
+            with self.subTest(default=name):
+                self.assertEqual(self.model(f'default {name}', f'branch {name}', 'tags v*'), [
+                    'branches.model: trunk', f'branches.release: {name}', f'branches.develop: {name}'])
+
+    def test_first_match_wins(self):
+        for lines, expected in (
+                (('default main', 'branch main', 'branch staging', 'branch hotfix/1'), ['trunk', 'main', 'main']),
+                (('default main', 'branch develop', 'branch main', 'branch production'), ['git-flow', 'main', 'develop']),
+                (('default develop', 'branch develop', 'branch master'), ['git-flow', 'master', 'develop']),
+                (('default trunk', 'branch development', 'branch trunk'), ['git-flow', 'trunk', 'development']),
+                (('default main', 'branch main', 'branch release/1.2', 'branch production'), ['release-branches']),
+                (('default main', 'branch main', 'branch production'), ['other', 'production', 'main']),
+                (('default production', 'branch production', 'branch staging'), ['trunk', 'production', 'production']),
+                (('default master', 'branch main', 'branch master'), ['other', 'main', 'master']),
+                (('default main', 'branch main', 'branch master'), ['other', 'master', 'main'])):
+            with self.subTest(lines=lines):
+                out = self.model(*lines)
+                self.assertEqual([line.split(': ', 1)[1] for line in out[:len(expected)]], expected)
+                if expected == ['release-branches']:
+                    self.assertEqual(out, ['branches.model: release-branches', 'branches.release_pattern: release/*'])
+
+
+class ProductRepositoryTest(unittest.TestCase):
+    """FR-013: the remote URL and `gh repo view` reach the transcript only through the filter."""
+
+    def read(self, origin, response=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            git_repo(Path(tmp) / 'app', origin)
+            bin_dir = Path(tmp) / 'bin'
+            bin_dir.mkdir()
+            gh = bin_dir / 'gh'
+            gh.write_text('#!/bin/bash\n[ -z "$GH_RESPONSE" ] && { echo "viewed $3"; exit; }\n'
+                          'while [ "$1" != --jq ]; do shift; done; exec jq -r "$2" "$GH_RESPONSE"\n')
+            gh.chmod(0o755)
+            env = {**os.environ, 'PATH': f'{bin_dir}:{os.environ["PATH"]}'}
+            if response is not None:
+                (Path(tmp) / 'view.json').write_text(response)
+                env['GH_RESPONSE'] = str(Path(tmp) / 'view.json')
+            result = subprocess.run(['bash', '-c', PRODUCT], capture_output=True, text=True, timeout=60,
+                                    cwd=Path(tmp) / 'app', env=env)
+            self.assertEqual(result.stderr, '')
+            return result.stdout.splitlines()
+
+    def test_origin_keeps_owner_and_name_only(self):
+        for origin, expected in (
+                ('https://user:userinfo-secret@github.com/acme/api.git?token=ghp_queryCredential', 'acme/api'),
+                ('https://github.com/acme/api?access_token=query-secret#frag-secret', 'acme/api'),
+                ('https://github.com/acme/api.git/', 'acme/api'),
+                ('git@github.com:acme/api.git', 'acme/api'),
+                ('ssh://git@github.com/acme/my.app.git', 'acme/my.app')):
+            with self.subTest(origin=origin):
+                self.assertEqual(self.read(origin), [f'origin {expected}', f'viewed {expected}'])
+        for origin in ('https://github.com/acme/ghp_repoCredential.git', 'https://github.com/acme/Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9',
+                       '/srv/git/api-path-secret.git', 'https://user:pa?ss-secret@github.com/acme/api.git',
+                       'https://github.com/acme/api/extra-path-secret'):
+            with self.subTest(origin=origin):
+                self.assertEqual(self.read(origin), ['origin <withheld>'])
+
+    @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
+    def test_view_masks_the_default_branch(self):
+        origin = 'https://github.com/acme/api.git?sig=query-secret'
+        for branch, shown in (('main', 'main'), ('ghp_defaultCredential', '<withheld>'),
+                              ('Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9', '<withheld>'), ('main?token=branch-secret', '<withheld>')):
+            with self.subTest(branch=branch):
+                response = ('{"nameWithOwner":"acme/api","isInOrganization":true,"isFork":false,'
+                            f'"defaultBranchRef":{{"name":"{branch}"}}}}')
+                out = self.read(origin, response)
+                self.assertEqual(out, ['origin acme/api', 'repo acme/api', 'organization true', 'fork false',
+                                       f'default {shown}'])
+                for value in ('Credential', 'secret', 'Ab1Cd2'):
+                    self.assertNotIn(value, '\n'.join(out))
+
+
 class ControlRepositoryTest(unittest.TestCase):
     """US2 scenario 1: resolve the control repository, read its profile, and let the stored values win."""
 
@@ -655,6 +766,48 @@ class EnvironmentKeyNamesTest(unittest.TestCase):
             'AFTER=1\n'), '.env.example')
         self.assertEqual((result.returncode, result.stderr), (0, ''))
         self.assertEqual(result.stdout.splitlines(), ['PRIVATE_KEY', 'SINGLE', 'TICK', 'INLINE', 'AFTER'])
+
+    def test_credential_looking_key_names_are_masked(self):
+        """FR-013: a valid identifier can itself be a credential."""
+        result = on_file(ENV_NAMES, (
+            'STRIPE_SECRET_KEY=placeholder\nghp_exampleKeyCredential=1\nexport Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9=1\n'
+            'X_AKIAIOSFODNN7EXAMPLE=1\n0123456789abcdef0123456789abcdef=1\nNEXT_PUBLIC_SUPABASE_ANON_KEY=x\n'), '.env.example')
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        self.assertEqual(result.stdout.splitlines(), ['STRIPE_SECRET_KEY', '<withheld>', '<withheld>', '<withheld>',
+                                                      'NEXT_PUBLIC_SUPABASE_ANON_KEY'])
+        for value in ('Credential', 'Ab1Cd2', 'AKIA', '0123'):
+            self.assertNotIn(value, result.stdout)
+
+    def test_untracked_example_files_are_listed(self):
+        """US2 scenario 5 holds before the example file is committed; `.env` is never opened."""
+        with tempfile.TemporaryDirectory() as tmp:
+            git_repo(Path(tmp) / 'app', 'https://github.com/acme/app.git',
+                     commit={'.gitignore': '.env\n.env.local\nignored/\n', 'deploy/.env.dist': 'TRACKED_NAME=x\n'})
+            app = Path(tmp) / 'app'
+            (app / '.env.example').write_text('STRIPE_SECRET_KEY=placeholder\nAPP_NAME=untracked-value\n')
+            (app / 'secrets.env.example').write_text('FORBIDDEN_NAME=forbidden-value-secret\n')
+            (app / '.env').write_text('STRIPE_SECRET_KEY=must-never-appear\n')
+            (app / '.env.local').write_text('LOCAL_TOKEN=must-never-appear\n')
+            (app / 'ignored').mkdir()
+            (app / 'ignored/.env.sample').write_text('IGNORED_NAME=x\n')
+            status = run('git status --porcelain', cwd=app).stdout
+            for path in (app / '.env', app / '.env.local', app / 'secrets.env.example'):
+                path.chmod(0)  # any read of a forbidden file now fails loudly on stderr
+
+            listed = run(f'{ENV_FILES} | {GUARD}', cwd=app)
+            self.assertEqual((listed.returncode, listed.stderr), (0, ''))
+            self.assertEqual(sorted(listed.stdout.splitlines()),
+                             ['.env.example', 'deploy/.env.dist', 'skipped secrets.env.example: not opened'])
+            names = []
+            for file in listed.stdout.splitlines():
+                if not file.startswith('skipped '):
+                    result = run(ENV_NAMES.replace('<file>', shlex.quote(file)), cwd=app)
+                    self.assertEqual((result.returncode, result.stderr), (0, ''))
+                    names += result.stdout.splitlines()
+            self.assertEqual(sorted(names), ['APP_NAME', 'STRIPE_SECRET_KEY', 'TRACKED_NAME'])
+            for path in (app / '.env', app / '.env.local', app / 'secrets.env.example'):
+                path.chmod(0o600)
+            self.assertEqual(run('git status --porcelain', cwd=app).stdout, status)
 
     def test_symlinked_example_files_are_not_opened(self):
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
