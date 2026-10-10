@@ -1,6 +1,6 @@
 ---
 name: autop-setup-project
-description: Use when the user wants to connect a GitHub organisation, repositories or a machine to Autop (the Development Autopilot), or asks "set up autop", "prepare this repo for autop", "onboard my project to autop", "install the autop runner", "why isn't autop picking my issues". Walks the real onboarding order (console sign-in, the three GitHub Apps on the organisation, the Projects v2 board, the control repo, labels, an enrolled runner), checks what is already done read-only, and prepares the repository-side files (AGENTS.md, control repo, labels) without touching the Autop console, App installations or secrets.
+description: Use when the user wants to connect a GitHub organisation, repositories or a machine to Autop (the Development Autopilot), or asks "set up autop", "prepare this repo for autop", "onboard my project to autop", "install the autop runner", "why isn't autop picking my issues". Walks the real onboarding order (console sign-in, the three GitHub Apps on the organisation, the Projects v2 board, the control repo, labels, an enrolled runner), checks what is already done read-only, and prepares the repository-side files (AGENTS.md, filling the control repo, labels) without touching the Autop console, App installations or secrets.
 ---
 
 # Set up a project for Autop
@@ -108,11 +108,10 @@ link:
    found it; otherwise use **Create `<slug>-autopilot` for me** (`<slug>` is
    the project's slug). When the form offers only the prefilled GitHub link,
    create the repo from it, or, if the form says Autop ATC's updated
-   permissions are not yet accepted, accept them from the settings link it
-   shows to turn on the offer. A new control repo is empty: come back to
-   this skill as soon as it exists, before filing any work, so it can be
-   filled and labelled (Step 2); if the board already holds `autop` work in
-   `Todo`, pause the project until then.
+   permissions are not yet accepted, have an org owner accept them from the
+   settings link it shows to turn on the offer. A new control repo has no
+   playbook yet: come back to this skill as soon as it exists, before
+   item 4, so it can be filled and labelled (Step 2).
 3. If the project starts paused ("waiting for App access to the control
    repository"), add the control repo to each App from the settings links
    the project page shows. The project activates by itself once all three
