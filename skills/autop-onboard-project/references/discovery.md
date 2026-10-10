@@ -530,11 +530,13 @@ Print package names, never whole manifests: URLs, scripts, authors and
 config blocks can carry a token or an internal address. Read the
 dependency names of `package.json` and `composer.json` with the commands
 below; a name outside letters, digits and `@ / _ . -`, or holding a known
-token prefix or a long mixed-case or hex string, prints as `<withheld>`:
+token prefix or a long mixed-case or hex string, prints as `<withheld>`.
+A manifest or dependency field that is not an object stops the command
+with an error that names no value:
 
 ```sh
-jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; (.dependencies // {}), (.devDependencies // {}) | keys[] | safe' <package.json>
-jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; (.require // {}), (.["require-dev"] // {}) | keys[] | safe' <composer.json>
+jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; def names: if type == "object" then keys[] | safe else error("a dependency field is not an object") end; if type == "object" then (.dependencies // {}), (.devDependencies // {}) | names else error("the manifest is not an object") end' <package.json>
+jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; def names: if type == "object" then keys[] | safe else error("a dependency field is not an object") end; if type == "object" then (.require // {}), (.["require-dev"] // {}) | names else error("the manifest is not an object") end' <composer.json>
 ```
 
 For `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
@@ -599,11 +601,11 @@ names only, never a value, with the command below. A key name holding a
 known token prefix or a long mixed-case or hex string prints as
 `<withheld>`. A value that
 opens a quote (`"`, `'` or a backtick) and does not close it on the same
-line runs on until the closing quote, and none of its lines is read as a
-key:
+line runs on until the closing quote, a backslash-escaped quote not
+closing it, and none of its lines is read as a key:
 
 ```sh
-awk 'function closes(v, c) { if (c == "\"") gsub(/\\./, "", v); return index(v, c) > 0 }
+awk 'function closes(v, c) { gsub(/\\./, "", v); return index(v, c) > 0 }
 { sub(/\r$/, "") }
 q != "" { if (closes($0, q)) q = ""; next }
 match($0, /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/) {

@@ -401,6 +401,21 @@ volumes:
         self.assertNotIn('Ab1Cd2', result.stdout)
         self.assertNotIn('secret', result.stdout)
 
+    @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
+    def test_invalid_package_fields_fail_without_values(self):
+        """FR-013: jq names a value it cannot take keys of; a field that is not an object stops value-free."""
+        for command, manifest, name in (
+                (PACKAGE_JSON, '{"dependencies":{"pg":"^8"},"devDependencies":"ghp_fieldCredential"}', 'package.json'),
+                (PACKAGE_JSON, '{"dependencies":["git+https://user:pw-secret@example.com/x"]}', 'package.json'),
+                (PACKAGE_JSON, '"ghp_manifestCredential"', 'package.json'),
+                (COMPOSER_JSON, '{"require":"sk-composerCredential"}', 'composer.json'),
+                (COMPOSER_JSON, '{"require-dev":12345678901234567890}', 'composer.json')):
+            result = on_file(command.replace(f'<{name}>', '<file>'), manifest, name)
+            self.assertNotEqual(result.returncode, 0, manifest)
+            self.assertIn('is not an object', result.stderr)
+            for value in ('Credential', 'secret', '12345'):
+                self.assertNotIn(value, result.stdout + result.stderr)
+
     def test_terraform_types_are_masked(self):
         """FR-013: a resource or provider label can hold a credential; only the masked type is printed."""
         with tempfile.TemporaryDirectory() as tmp:
@@ -906,6 +921,16 @@ class EnvironmentKeyNamesTest(unittest.TestCase):
             'AFTER=1\n'), '.env.example')
         self.assertEqual((result.returncode, result.stderr), (0, ''))
         self.assertEqual(result.stdout.splitlines(), ['PRIVATE_KEY', 'SINGLE', 'TICK', 'INLINE', 'AFTER'])
+
+    def test_escaped_quotes_do_not_close_a_value(self):
+        """FR-013: an escaped apostrophe or backtick keeps a multiline value open."""
+        result = on_file(ENV_NAMES, (
+            "SINGLE='it\\'s\nSINGLEVALUE=line-secret\nend'\n"
+            'TICK=`one\\`\nTICKVALUE=two-secret`\n'
+            "CLOSED='done\\\\'\n"
+            'AFTER=1\n'), '.env.example')
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        self.assertEqual(result.stdout.splitlines(), ['SINGLE', 'TICK', 'CLOSED', 'AFTER'])
 
     def test_credential_looking_key_names_are_masked(self):
         """FR-013: a valid identifier can itself be a credential."""
