@@ -52,9 +52,11 @@ evidence settles is stated, not asked, and the person's answer wins.
 ## Step 3 — Write (ask once, then do)
 
 Assemble the profile exactly as the contract says and show the full write
-list: branches, files, the `AGENTS.md` section and commit messages.
-After an explicit yes, commit on a branch and open the pull requests with
-the person's `gh` login, or push directly only when asked.
+list once: the control repository's branch and files, the product
+repository's `## Branches and delivery` section of `AGENTS.md` that links to
+the profile, and every commit message. After an explicit yes, commit on a
+branch in each repository and open the pull requests with the person's `gh`
+login, or push directly only when asked.
 
 ## Report
 
@@ -80,6 +82,6 @@ the control repository, and the next step: file the first story with
   never appear").
 - Run in a product repository's checkout, not the control repository; the
   profile is written only to the control repository, never to the product
-  repository.
+  repository, which gets only its `AGENTS.md` section.
 - Organisation projects only: a checkout owned by a personal account stops
   the skill; `autop-setup-project` explains the move to an organisation.

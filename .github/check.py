@@ -30,7 +30,7 @@ rel = example.relative_to(root)
 match = re.match(r'\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)', example.read_text() if example.is_file() else '', re.S)
 try:
     profile = yaml.safe_load(match[1]) if match else None
-except yaml.YAMLError:
+except (yaml.YAMLError, ValueError):
     profile = None
 if not isinstance(profile, dict):
     errors.append(f'{rel}: invalid profile front matter')
