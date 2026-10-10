@@ -19,7 +19,7 @@ human actions.
 |---|---|---|
 | Sign-in and a workspace | https://app.autop.dev (GitHub OAuth) | person |
 | Three GitHub Apps installed on the **organisation** that owns the repos: *Autop ATC*, *Autop Coder*, *Autop Reviewer* | GitHub org settings, via the console's install links | person (org owner) |
-| A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub | person, or this skill with `gh` |
+| A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub, created from the Autop console's new-project wizard ("Create a board for me") or repaired from project settings | person in the console; or a person with `gh` plus the GitHub UI |
 | A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | this skill |
 | Every product repo and the control repo covered by all three App installations | GitHub | person |
 | `AGENTS.md` in every product repo: how to build, test and lint, the code-review focus | repo | this skill |
@@ -79,10 +79,15 @@ Show the person the list of writes and get a yes.
   branch and open a PR, unless the person asks for a direct push.
 - **Labels.** `autop issue labels <ORG>/<repo> ...` for every product repo
   and the control repo.
-- **Board.** If no board exists and the person agrees, create one:
+- **Board.** Send the person to the console first: with no board, create
+  one from the new-project wizard ("Create a board for me"), which adds the
+  `Status` options and the `Priority` field; with an existing board missing
+  options, repair it from the project's Settings → Board. Only as the manual
+  alternative, if the person agrees, create one with
   `gh project create --owner <ORG> --title "<name>"`, then add the missing
-  `Status` options and the optional `Priority` field through the GitHub UI
-  (`gh` cannot edit single-select options). Say exactly which options to add.
+  `Status` options (`Todo`, `In Progress`, `Ready for Review`, `Blocked`,
+  `Done`) and the optional `Priority` field (`P0`–`P3`) through the GitHub UI
+  (the console repairs options; `gh` cannot). Say exactly which options to add.
 
 ## Step 3 — Hand over the console side
 
