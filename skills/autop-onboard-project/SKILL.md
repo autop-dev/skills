@@ -37,10 +37,45 @@ repository's `profile/README.md` is written once, verbatim from
 
 ## Step 1 — Discover (read-only)
 
-Resolve the product repository, its organisation and the control repository,
-and read any existing profile there as the defaults.
-Gather the evidence the checkout already holds and show it as a table of
-fact, evidence and proposed default; nothing is written.
+Nothing is written in this step: no file, branch, commit, fetch, checkout or
+install, in any checkout (only a clone of the control repository the person
+accepts). `git status --porcelain` reads the same before and after.
+
+1. **`gh` and the product repository.** `gh auth status` must show a login.
+   In the checkout, `git remote get-url origin` and
+   `gh repo view --json nameWithOwner,isInOrganization,defaultBranchRef`
+   give `REPO=<org>/<repo>` and the default branch. Not a git checkout →
+   ask for the product repository's path. `isInOrganization` false → say the
+   profile belongs to an organisation project, point at the setup skill's
+   [personal-to-organisation.md](../autop-setup-project/references/personal-to-organisation.md),
+   and stop.
+2. **Control repo `$AP`.** Prefer the repository/path explicitly named by
+   the user or the workspace's `AGENTS.md` / `README.md` as the **Control
+   repository**. The name is arbitrary: `autop-dev/control` is valid. Resolve
+   it to a local git checkout and verify `origin` matches that GitHub repo.
+   Otherwise look for a conventional `*-autopilot/` checkout at/under cwd or
+   its parent, then in the runner's `repos_dir`. Never select a repo merely
+   because it contains `.specify/`. Zero or several candidates → ask which
+   repository is configured as the project's control repo in the Autop console;
+   offer to clone that exact repo if absent. No control repo → finish this
+   step and stop after the table; the profile is never written to the product
+   repository. `$AP`'s owner must be `<org>`. When `$AP`'s `origin` is the
+   checkout's own `origin`, the person is in the control repository: ask
+   which product repository to profile and where its checkout is, and
+   continue there.
+3. **Existing profile.** Read `$AP/profile/<repo>.md` if it exists. With
+   `profile: 1` its values are the defaults, and the evidence is shown next
+   to them. Any other version, or front matter that does not parse, is
+   unreadable: say so, and Step 3 will not overwrite it.
+4. **Evidence.** Follow [references/discovery.md](references/discovery.md):
+   branches and `v*` tags with the model rule, CI files and gates, deploy
+   manifests with kind and trigger, environments, package manifests to
+   services, example environment files to key *names* only (secret-looking
+   names marked), compose images and driver packages to data stores. Never
+   open a forbidden file.
+5. **Show** the evidence table (fact · evidence · proposed default), the
+   files opened, and the forbidden files seen but not opened. No value from
+   an environment file and no credential-looking string appears.
 
 ## Step 2 — Interview
 
