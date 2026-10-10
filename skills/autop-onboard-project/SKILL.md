@@ -43,9 +43,11 @@ accepts, placed next to the product checkout, never inside it).
 `git status --porcelain` reads the same before and after.
 
 1. **`gh` and the product repository.** `gh auth status` must show a login.
-   In the checkout, `gh repo view "$(git remote get-url origin)" --json
-   nameWithOwner,isInOrganization,defaultBranchRef` gives
-   `REPO=<org>/<repo>` and the default branch. Not a git checkout → ask for
+   In the checkout, take `<owner>/<name>` from `git remote get-url origin`
+   (SSH and HTTPS remotes are both valid); `gh repo view <owner>/<name>
+   --json nameWithOwner,isInOrganization,isFork,defaultBranchRef` gives
+   `REPO=<org>/<repo>` and the default branch. A fork → ask for the
+   organisation repository's checkout. Not a git checkout → ask for
    the product repository's path. `isInOrganization` false → say the
    profile belongs to an organisation project, point at the setup skill's
    [personal-to-organisation.md](../autop-setup-project/references/personal-to-organisation.md),
@@ -61,7 +63,7 @@ accepts, placed next to the product checkout, never inside it).
    offer to clone that exact repo if absent. No control repo → finish this
    step and stop after the table; the profile is never written to the product
    repository. Set `AP_REPO=<owner>/<actual-repo-name>` from the verified
-   `origin`; never synthesize a repository name. `$AP`'s owner must be
+   `origin` (SSH and HTTPS remotes are both valid); never synthesize a repository name. `$AP`'s owner must be
    `<org>`; otherwise ask again. When `AP_REPO` equals `REPO` (compare
    owner/name, not remote URLs), the person is in the control repository:
    ask which product repository to profile and where its checkout is, and

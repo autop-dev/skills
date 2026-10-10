@@ -35,8 +35,8 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
 
 ## Branches
 
-- **Default branch**: `gh repo view --json defaultBranchRef --jq .defaultBranchRef.name`.
-  If that fails, use `git symbolic-ref --short refs/remotes/origin/HEAD`
+- **Default branch**: `defaultBranchRef` from Step 1 item 1. If that
+  failed, use `git symbolic-ref --short refs/remotes/origin/HEAD`
   and drop the `origin/` prefix.
 - **Long-lived branches**: from `git ls-remote --heads origin`, keep only
   the default branch and `main`, `master`, `develop`, `development`,
@@ -46,12 +46,13 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
   propose `tags: "v*"`. Offline, use `git tag -l 'v*'`.
 - **Model rule**, first match wins:
   1. `develop` or `development` exists: `git-flow`. That branch is
-     `develop`. `release` is the default branch, or `main`/`master` if the
-     default branch is `develop`.
+     `develop`. `release` is `main` or `master` when one exists, else the
+     default branch.
   2. `release/*` exists: `release-branches`, with
      `release_pattern: "release/*"`.
-  3. `production` (or `master` next to a `main` default) exists: `other`,
-     with that branch proposed as `release` and the default as `develop`.
+  3. `production` exists, or `main` and `master` both exist: `other`, with
+     `production` or the non-default one of the pair proposed as `release`
+     and the default as `develop`.
   4. Otherwise, the default branch alone, or with only `staging` or
      `hotfix/*`: `trunk`, and `release = develop = default`.
 
@@ -80,7 +81,8 @@ when the login can read them. For another CI system, list its job or stage
 names and ask for the gates and trigger. The commands below assume
 two-space YAML indentation; adjust the counts for other files. Read GitHub
 Actions jobs and environments with
-`sed -n '/^jobs:/,$p' <file> | grep -nE '^ {2}[A-Za-z0-9_-]+:[[:space:]]*$|^ {4}(name|environment):|^ {6}name:'`.
+`sed -n '/^jobs:/,$p' <file> | grep -nE '^ {2}[A-Za-z0-9_-]+:[[:space:]]*$|^ {4}name:|^ {4}environment: *[A-Za-z0-9_-]* *$|^ {6}name:'`
+(an inline `environment: {…}` map is skipped, because it can hold a URL).
 Read triggers with
 `sed -n "/^[\"']\{0,1\}on[\"']\{0,1\}:/,/^[a-z]/p" <file>`.
 
@@ -122,7 +124,7 @@ Take names from these sources:
 - the branches `staging` and `production`.
 
 Read compose services, images and the `Dockerfile`s they build with
-`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#(image: *)[^/ ]+\.[^/ ]+/#\1<registry>/#'`
+`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#'`
 (a registry host is replaced), and profiles with
 `awk '/^ +profiles:/{p=1; print NR": "$0; next} p && /^ +- [A-Za-z0-9_-]+ *$/{print NR": "$0; next} {p=0}' <file>`.
 Never read `environment:`, `command:`, `secrets:` or `args:` blocks. If no source names an environment,
@@ -133,12 +135,12 @@ propose `none`.
 Print package names, never whole manifests: URLs, scripts, authors and
 config blocks can carry a token or an internal address. For `package.json`
 use `jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and
-for `composer.json` the same over `require` and `require-dev`. For
+for `composer.json` use `jq -r '(.require // {}), (.["require-dev"] // {}) | keys[]'`. For
 `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
 `pubspec.yaml` and `*.csproj`, print only the table names they contain:
 
 ```sh
-grep -ohiE 'stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algolia|launchdarkly|segment|datadog|dd-trace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?' <files> | sort -u
+grep -ohiwE 'stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algolia|launchdarkly|segment|datadog|dd-trace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?' <files> | sort -u
 ```
 
 Match a package by its name, without version or extras:
@@ -168,7 +170,7 @@ prefix, and Go module paths or .NET packages that contain a row's name
 |---|---|
 | `pg`, `psycopg*`, `asyncpg`, `pgx`, `Npgsql`; image `postgres` | PostgreSQL |
 | `mysql2`, `mysqlclient`, `pymysql`, `mysql-connector-*`; image `mysql`, `mariadb` | MySQL, MariaDB |
-| `mongoose`, `pymongo`, `motor`; image `mongo` | MongoDB |
+| `mongodb`, `mongo-driver`, `mongoose`, `pymongo`, `motor`; image `mongo` | MongoDB |
 | `redis`, `ioredis`; image `redis` | Redis |
 | `sqlite3` | SQLite |
 | image `elasticsearch`, `rabbitmq` | Elasticsearch, RabbitMQ |
