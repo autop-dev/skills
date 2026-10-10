@@ -13,3 +13,4 @@ jobs:
       - run: pip install PyYAML
       - run: python .github/check.py
       - run: python .github/test_check.py -v
+      - run: python .github/test_discovery.py -v

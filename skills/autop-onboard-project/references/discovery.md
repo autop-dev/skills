@@ -35,6 +35,40 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
 To see them, use `ls -a` on the root and on each directory that holds a
 manifest; it prints names only.
 
+## Existing profile
+
+Never print the profile as fetched. Hold it in a variable and pass it
+through this filter, which validates it first. A file that does not open
+with a `---` front matter block holding `profile: 1` prints one
+`unreadable:` line and nothing from the file. A readable one prints its
+front matter only. A line whose value looks like a credential (a URL with
+user information, a fragment or a query string; a known token prefix; a
+private key; a `NAME=value` pair; a long mixed-case or hex string; or a key
+named like a secret) prints its key and `<withheld>`. A missing file prints
+nothing, and `gh` reports `HTTP 404`. Offline, the first line is
+`p=$(git -C "$AP" show origin/HEAD:profile/<repo>.md) &&`.
+
+```sh
+p=$(gh api -H 'Accept: application/vnd.github.raw' "repos/$AP_REPO/contents/profile/<repo>.md") &&
+printf '%s\n' "$p" | awk 'function risky(s,   r) {
+    if (s ~ /:\/\/[^\/[:space:]]*@|:\/\/[^[:space:]]*#|\?|-----BEGIN|PRIVATE KEY|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]/) return 1
+    if (s ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+    while (match(s, /[A-Za-z0-9+\/=_-]+/)) { r = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
+      if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+    return 0 }
+  { sub(/\r$/, "") }
+  NR == 1 { if ($0 != "---") { print "unreadable: no front matter"; bad = 1; exit } next }
+  $0 == "---" { closed = 1; exit }
+  { fm[++n] = $0; if ($0 ~ /^profile:[[:space:]]*1[[:space:]]*(#.*)?$/) ok = 1 }
+  END { if (bad) exit 1
+    if (!closed || !ok) { print "unreadable: " (closed ? "not profile: 1" : "front matter not closed"); exit 1 }
+    for (x = 1; x <= n; x++) { l = fm[x]; k = ""
+      if (match(l, /^[[:space:]]*(- )?[A-Za-z0-9_.-]+:/)) k = substr(l, 1, RLENGTH)
+      if (k != "" && toupper(k) ~ /KEY|SECRET|TOKEN|PASS|PWD|DSN|CREDENTIAL|PRIVATE|AUTH/ && substr(l, length(k) + 1) ~ /[^[:space:]]/ || risky(l))
+        print (k != "" && !risky(k) ? k " " : substr(l, 1, match(l, /[^[:space:]-]/) - 1)) "<withheld>"
+      else print l } }'
+```
+
 ## Branches
 
 - **Default branch**: `defaultBranchRef` from Step 1 item 1. If that
@@ -81,14 +115,60 @@ workflows triggered by `pull_request` (not deploy, release or scheduled
 jobs); `gh api repos/$REPO/rules/branches/<default>` and
 `gh api repos/$REPO/branches/<default>/protection/required_status_checks`
 show required checks when the login can read them. For another CI system, list its job or stage
-names and ask for the gates and trigger. The commands below assume
-two-space YAML indentation; adjust the counts for other files. Read GitHub
-Actions jobs and environments with
-`awk '/^jobs:/{j=1; next} j && /^[^ #]/{j=0} j && (/^  [A-Za-z0-9_-]+: *$/ || /^    name:/ || /^    environment: *[A-Za-z0-9_-]* *$/){print NR": "$0; e=/environment: *$/; next} e && /^      name:/{print NR": "$0} {e=0}' <file>`
-(job keys, job names and environment names only; an inline
-`environment: {…}` map and every `with:` or `secrets:` value are skipped).
-Read triggers with `awk '/^.?on.?:/{p=1; print; next} /^[^ #]/{p=0} p' <file>`,
-which stops before the next top-level key.
+names and ask for the gates and trigger. The two GitHub Actions commands
+below follow the file's own indentation and print nothing but names. An
+environment or branch name outside letters, digits, spaces and `_ . / * + ! -`
+prints as `<withheld>`, and a `${{ … }}` expression as `<expression>`; ask
+for those. Read job keys, job names and environment names (plain, quoted,
+an inline `{name: …}` map, or `name:` anywhere in an `environment:` block)
+with:
+
+```sh
+awk 'function clean(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
+  gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v)
+  if (v ~ /\$\{\{/) return "<expression>"; return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
+{ sub(/\r$/, "") }
+/^[[:space:]]*(#|$)/ { next }
+{ i = match($0, /[^ ]/) - 1; l = substr($0, i + 1) }
+i == 0 { j = (l ~ /^jobs:[[:space:]]*(#.*)?$/); ji = pi = ei = -1; next }
+!j { next }
+ei >= 0 && i > ei { if (l ~ /^name:/) print NR ": environment " clean(substr(l, 6)); next }
+{ ei = -1 }
+ji < 0 { ji = i }
+i == ji { if (l ~ /^[A-Za-z0-9_-]+:[[:space:]]*(#.*)?$/) { sub(/:.*/, "", l); print NR ": job " l }; pi = -1; next }
+pi < 0 { pi = i }
+i != pi { next }
+l ~ /^name:/ { print NR ": name" substr(l, 6); next }
+l !~ /^environment:/ { next }
+{ v = clean(substr(l, 13)) }
+v == "<withheld>" && substr(l, 13) ~ /^[[:space:]]*(#.*)?$/ { ei = i; next }
+v == "<withheld>" && match(l, /[{,][[:space:]]*name:[^,}]*/) { v = substr(l, RSTART, RLENGTH); sub(/^[{,][[:space:]]*name:/, "", v); v = clean(v) }
+{ print NR ": environment " v }' <file>
+```
+
+Read the triggers with the command below. It prints each trigger type
+and the `branches`, `branches-ignore`, `tags` and `tags-ignore` names, and
+nothing else: no `workflow_dispatch` input, `paths` or `cron` value.
+
+```sh
+awk 'function clean(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
+  gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v)
+  if (v ~ /\$\{\{/) return "<expression>"; return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
+function each(p, v,   n, t, x) { sub(/[[:space:]]+#.*$/, "", v); gsub(/[][,]/, " ", v); n = split(v, t, " ")
+  for (x = 1; x <= n; x++) print NR ": " p clean(t[x]) }
+{ sub(/\r$/, "") }
+/^[[:space:]]*(#|$)/ { next }
+{ i = match($0, /[^ ]/) - 1; l = substr($0, i + 1) }
+i == 0 { o = 0; k = l; gsub(/"/, "", k); gsub(sprintf("%c", 39), "", k)
+  if (k !~ /^on:/) next; k = substr(k, 4); sub(/^[[:space:]]+/, "", k)
+  if (k ~ /^(#.*)?$/) { o = 1; ti = -1 } else if (k ~ /^\{/) print NR ": on <inline map, ask>"; else each("trigger ", k); next }
+!o { next }
+ti < 0 { ti = i }
+i == ti { t = l; sub(/^-[[:space:]]*/, "", t); sub(/:.*/, "", t); t = clean(t); print NR ": trigger " t; f = ""; si = -1; next }
+si < 0 { si = i }
+i == si && l !~ /^-/ { f = ""; if (l ~ /^(branches|branches-ignore|tags|tags-ignore):/) { f = l; sub(/:.*/, "", f); each(t " " f " ", substr(l, length(f) + 2)) }; next }
+f != "" && l ~ /^-/ { each(t " " f " ", substr(l, 2)) }' <file>
+```
 
 | Deploy manifest (any directory) | Proposed `kind` |
 |---|---|
@@ -121,15 +201,25 @@ Take names from these sources:
 - workflow `environment:` keys, and
   `gh api repos/$REPO/environments --jq '.environments[].name'` when the
   login can read them;
-- `firebase.json` hosting `target` values
-  (`grep -nE '"(hosting|target|site)"' firebase.json`) and the
-  `.firebaserc` `projects` and `targets` aliases;
+- `firebase.json` hosting `target` and `site` names, read structurally
+  (no other value is printed, and a name outside letters, digits and
+  `_ . -` prints as `<withheld>`):
+  `jq -r 'def safe: if type == "string" and test("^[A-Za-z0-9_.-]*$") then . else "<withheld>" end; if type == "object" and has("hosting") then [.hosting] | flatten[] | "hosting target=\(.target? // "" | safe) site=\(.site? // "" | safe)" else empty end' firebase.json`,
+  and the `.firebaserc` `projects` and `targets` aliases;
 - compose `profiles:`;
 - the branches `staging` and `production`.
 
-Read compose services, images and the `Dockerfile`s they build with
-`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'`
-(a registry host is replaced), and profiles with
+Read compose services, images and the `Dockerfile`s they build with the
+command below (two-space indentation; adjust the counts for other files).
+A value holding a URL, and a `build:` or `dockerfile:` value holding `:`,
+`@` or `?` (a remote Git context can carry `user:token@`), prints as
+`<withheld>`; a registry host is replaced.
+
+```sh
+grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'
+```
+
+Read profiles with
 `awk '/^ +profiles:/{p=1; print NR": "$0; next} p && /^ +- [A-Za-z0-9_-]+ *$/{print NR": "$0; next} {p=0}' <file>`.
 Never read `environment:`, `command:`, `secrets:` or `args:` blocks. If no source names an environment,
 propose `none`.
