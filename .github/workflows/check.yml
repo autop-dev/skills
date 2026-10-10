@@ -20,3 +20,6 @@ jobs:
           python-version: '3.13'
       - run: pip install PyYAML
       - run: python .github/check.py
+      - run: python .github/test_check.py -v
+      - run: python .github/test_discovery.py -v
+      - run: python .github/test_questions.py -v
