@@ -26,6 +26,7 @@ human actions.
 | Autop's labels in every repo (`autop`, `P0`–`P3`, `epic`, `human-task`, `needs-human`, `blocked-on-question`) | repo | `autop issue labels` |
 | A project in the console binding organisation + board + control repo + repos, with agent routes | console | person |
 | At least one enrolled runner online, with ready repos and a usable coding CLI (ATC queues preparation jobs for missing policy repos) | the person's machine | person, with `autop runner setup` |
+| A project profile `profile/<repo>.md` per product repo: branches, CI/CD, deploy targets, environments, services | control repo | `autop-onboard-project` |
 
 Personal-account repos and boards are rejected by design: everything lives
 in one organisation the tenant owns. Why, and how to move repositories from a
@@ -102,7 +103,11 @@ Print the remaining person-only steps in order, each with its link:
    not proof the service is online; verify that in the console.
    The runner needs the coding CLI logged in on that machine; Autop never
    sees those credentials.
-5. Smoke test: file one small, reversible story with `autop-add-issue` (a
+5. In each product repository's checkout run `autop-onboard-project` to
+   record the project profile (branches, CI/CD, deploy targets, environments
+   and services) as `profile/<repo>.md` in the control repo; merge the pull
+   request it opens.
+6. Smoke test: file one small, reversible story with `autop-add-issue` (a
    documentation change is ideal) and watch its job, PR, review and board
    move in the console.
 
