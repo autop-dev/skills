@@ -45,13 +45,14 @@ COMPOSE_PROFILES = fenced("awk 'function out(v,")
 PROFILE = fenced('p=$(gh api ')
 BRANCHES = fenced('d=${DEFAULT:-')
 PROFILE_OFFLINE = inline('p=$(git -C "$AP" show')
-CONTROL = fenced('want=$(')
+CONTROL = fenced('name() {', 'want=$(')
 MERGE = fenced("printf '%s\\n' \"$defaults\"")
 FIREBASE = inline("jq -r 'def safe:")
 ENV_FILES = inline("git ls-files -co --exclude-standard -- '*.env.example'")
 ENV_NAMES = fenced("awk 'function closes(")
 PRISMA = fenced("git grep -hE '^[[:space:]]*provider")
 GUARD = fenced('while IFS= read -r f;')
+FORBIDDEN = fenced('for d in . <directories>;')
 MANIFESTS = inline("git ls-files -- ':(exclude).github/*'")
 GH_ENVIRONMENTS = inline('gh api repos/$REPO/environments --jq ')
 GH_RULES = inline('gh api repos/$REPO/rules/branches/<default> --jq ')
@@ -179,6 +180,22 @@ class WorkflowTest(unittest.TestCase):
                 self.assertEqual(result.stdout.splitlines(), expected)
                 for value in ('Credential', 'secret', 'Ab1Cd2', '0123'):
                     self.assertNotIn(value, result.stdout)
+
+    def test_quoted_keys(self):
+        """FR-010: `'jobs':` and `"environment":` are the same YAML keys as the plain ones."""
+        workflow = ("'on': [pull_request]\n{jobs}:\n  \"build\":\n    'name': Build\n    'environment': 'staging'\n"
+                    "  deploy:\n    \"environment\":\n      'url': https://deploy.example.com/?sig=quoted-url-secret\n"
+                    "      \"name\": production\n"
+                    "  inline:\n    'environment': { 'name': preview, url: https://user:inline-quoted-secret@example.com }\n"
+                    "  plain:\n    environment: { \"name\": review }\n")
+        for jobs in ("'jobs'", '"jobs"', 'jobs'):
+            with self.subTest(jobs=jobs):
+                result = on_file(JOBS, workflow.replace('{jobs}', jobs))
+                self.assertEqual((result.returncode, result.stderr), (0, ''))
+                self.assertEqual([line.split(': ', 1)[1] for line in result.stdout.splitlines()], [
+                    'job build', 'name Build', 'environment staging', 'job deploy', 'environment production',
+                    'job inline', 'environment preview', 'job plain', 'environment review'])
+                self.assertNotIn('secret', result.stdout)
 
     def test_any_indentation(self):
         result = on_file(JOBS, FOUR_SPACE)
@@ -409,6 +426,49 @@ volumes:
             self.assertEqual(opened, ['deploy/Dockerfile'])
             for path in (app / '.env', app / 'secrets-compose.yml', Path(outside) / 'compose.yml'):
                 path.chmod(0o600)
+
+    def test_credential_looking_paths_are_withheld(self):
+        """FR-013: a file name can hold a credential; the guard never prints or opens such a path."""
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / 'app'
+            risky = ('deploy/ghp_pathCredential-compose.yml', 'Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9/Dockerfile',
+                     'ops/compose=query-secret.yml', 'xoxb-exampleCredential.env.example')
+            git_repo(app, 'https://github.com/acme/app.git',
+                     commit={'deploy/Dockerfile': 'FROM node:22\n', **{path: 'services:\n  x:\n' for path in risky}})
+            for path in risky:
+                (app / path).chmod(0)  # any read of these files now fails loudly on stderr
+            listed = run(f"{{ {MANIFESTS}; {ENV_FILES}; echo secrets-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9.yml; }} | {GUARD}",
+                         cwd=app)
+            self.assertEqual((listed.returncode, listed.stderr), (0, ''))
+            self.assertEqual(sorted(listed.stdout.splitlines()),
+                             ['deploy/Dockerfile'] + ['skipped <withheld>: not opened'] * 5)
+            for value in ('Credential', 'Ab1Cd2', 'secret'):
+                self.assertNotIn(value, listed.stdout)
+            for path in risky:
+                (app / path).chmod(0o600)
+
+    def test_forbidden_names_only_and_masked(self):
+        """FR-013: forbidden files are listed by name, and a name holding a credential is withheld."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            names = ('.env', '.env.example', '.env.ghp_envNameCredential', 'README.md', 'id_rsa', 'package.json',
+                     'deploy/secrets-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9.json', 'deploy/prod.key', 'deploy/compose.yml',
+                     'deploy/.env.sample', 'deploy/credentials.env.example', 'deploy/app.tfstate.backup')
+            for name in names:
+                (root / name).parent.mkdir(exist_ok=True)
+                (root / name).write_text('TOKEN=must-never-appear\n')
+                (root / name).chmod(0)  # listing names never reads a file
+            result = run(FORBIDDEN.replace('<directories>', 'deploy'), cwd=root)
+            self.assertEqual((result.returncode, result.stderr), (0, ''))
+            self.assertEqual(sorted(result.stdout.splitlines()), sorted([
+                'forbidden .env: not opened', 'forbidden <withheld>: not opened', 'forbidden id_rsa: not opened',
+                'forbidden <withheld>: not opened', 'forbidden deploy/prod.key: not opened',
+                'forbidden deploy/credentials.env.example: not opened',
+                'forbidden deploy/app.tfstate.backup: not opened']))
+            for value in ('Credential', 'Ab1Cd2', 'must-never-appear'):
+                self.assertNotIn(value, result.stdout)
+            for name in names:
+                (root / name).chmod(0o600)
 
 
 EXAMPLE_VALUES = [
@@ -672,6 +732,33 @@ class ControlRepositoryTest(unittest.TestCase):
         self.assertEqual(self.candidates({'REPOS_DIR': str(self.ws / 'repos')}), [
             f'candidate {self.ws}/acme-autopilot acme/acme-autopilot',
             f'candidate {self.ws}/repos/beta-autopilot acme/beta-autopilot'])
+
+    def set_origin(self, path, origin):
+        subprocess.run(['git', '-C', str(path), 'remote', 'set-url', 'origin', origin], check=True)
+
+    def test_remote_names_are_masked(self):
+        """FR-013: a sibling's origin can carry a credential in its query string, fragment or name."""
+        self.set_origin(self.ws / 'acme-autopilot', 'https://github.com/acme/acme-autopilot.git?access_token=ghp_queryCredential')
+        git_repo(self.ws / 'repos/beta-autopilot', 'https://github.com/acme/ghp_repoCredential.git')
+        git_repo(self.ws / 'repos/gamma-autopilot', 'git@github.com:acme/gamma-autopilot.git#frag-secret')
+        git_repo(self.ws / 'repos/delta-autopilot', 'https://user:userinfo-secret@github.com/acme/Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9')
+        out = self.candidates({'REPOS_DIR': str(self.ws / 'repos')})
+        self.assertEqual(out, [f'candidate {self.ws}/acme-autopilot acme/acme-autopilot',
+                               f'candidate {self.ws}/repos/beta-autopilot <withheld>',
+                               f'candidate {self.ws}/repos/delta-autopilot <withheld>',
+                               f'candidate {self.ws}/repos/gamma-autopilot acme/gamma-autopilot'])
+        for value in ('Credential', 'secret', 'Ab1Cd2'):
+            self.assertNotIn(value, '\n'.join(out))
+
+    def test_named_control_origin_is_masked(self):
+        (self.ws / 'AGENTS.md').write_text('Control repository: acme/control\n')
+        self.set_origin(self.ws / 'control', 'https://github.com/Acme/Control.git?token=ghp_controlCredential#frag-secret')
+        self.assertEqual(self.candidates(), ['named acme/control', f'candidate {self.ws}/control Acme/Control'])
+
+    def test_credential_looking_named_repository_matches_nothing(self):
+        (self.ws / 'AGENTS.md').write_text('Control repository: acme/ghp_namedCredential\n')
+        git_repo(self.ws / 'leak', 'https://github.com/acme/Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9')
+        self.assertEqual(self.candidates(), ['named <withheld>'])
 
     def test_stored_profile_values_are_the_defaults(self):
         (self.ws / 'AGENTS.md').write_text('Control repository: acme/control\n')

@@ -32,8 +32,23 @@ value as the default and add "(profile)". When the checkout disagrees, add
 
 Below the table, list every file you opened, by path. Then list the
 forbidden files you saw in the checkout, by name only, marked "not opened".
-To see them, use `ls -a` on the root and on each directory that holds a
-manifest; it prints names only.
+Never print a raw `ls`: a file name can hold a credential. Find them with
+the command below, `<directories>` being each directory that holds a
+manifest the guard ("Opening files") printed. It prints one
+`forbidden <path>: not opened` line per forbidden name only, and a path
+holding a character outside letters, digits, spaces and `_ . / @ + -`, a
+known token prefix or a long mixed-case or hex string as
+`forbidden <withheld>: not opened`:
+
+```sh
+for d in . <directories>; do ls -A -- "$d" 2>/dev/null | awk -v d="$d" 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ n = $0; f = (d == "." ? "" : d "/") n }
+n !~ /^(secrets|credentials)/ && (n ~ /\.env\.(example|sample|template|dist)$/ || n !~ /^(\.env|\.npmrc$|\.pypirc$|\.netrc$|id_rsa|id_ed25519|kubeconfig)|\.(pem|key|p12|tfvars)$|\.tfstate/) { next }
+{ print "forbidden " (risky(f) || f !~ /^[A-Za-z0-9_.\/@+ -]+$/ ? "<withheld>" : f) ": not opened" }'; done
+```
 
 To fill the last column, keep the profile filter's output as `defaults` and
 write the checkout's proposals in the same `key: value` form as `checkout`
@@ -60,15 +75,25 @@ file) opens only a path that this guard printed. Pipe each `git ls-files`
 listing into it. It prints each path that is a regular file, not a symlink,
 in a directory inside the checkout, and not a forbidden name; any other
 path prints one `skipped` line instead (a tracked `compose.yml` or
-`.env.example` can point at `.env`). List skipped paths as "not opened".
+`.env.example` can point at `.env`). List skipped paths as "not opened". A
+path holding a character outside letters, digits, spaces and
+`_ . / @ + -`, a known token prefix or a long mixed-case or hex string is
+never opened and prints as `skipped <withheld>: not opened`.
 
 ```sh
 while IFS= read -r f; do d=$(CDPATH= cd -- "$(dirname -- "$f")" 2>/dev/null && pwd -P)
   case "$d/" in "$(pwd -P)/"*) ;; *) d= ;; esac
   case "${f##*/}" in secrets*|credentials*) d= ;; *.env.example|*.env.sample|*.env.template|*.env.dist) ;;
     .env*|*.pem|*.key|*.p12|.npmrc|.pypirc|.netrc|id_rsa*|id_ed25519*|kubeconfig*|*.tfstate*|*.tfvars) d= ;; esac
-  if [ -z "$d" ] || [ -L "$f" ] || [ ! -f "$f" ]; then echo "skipped $f: not opened"; else printf '%s\n' "$f"; fi
-done
+  if [ -z "$d" ] || [ -L "$f" ] || [ ! -f "$f" ]; then printf 'skipped\t%s\n' "$f"; else printf 'open\t%s\n' "$f"; fi
+done | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ t = substr($0, 1, index($0, "\t") - 1); f = substr($0, length(t) + 2) }
+risky(f) || f !~ /^[A-Za-z0-9_.\/@+ -]+$/ { print "skipped <withheld>: not opened"; next }
+t == "open" { print f; next }
+{ print "skipped " f ": not opened" }'
 ```
 
 ## Product repository
@@ -105,17 +130,27 @@ prints it as `named`, and prints each git checkout at or under the current
 directory, its parent, or `$REPOS_DIR` whose `origin` is that repository
 (case-insensitively). With no name, it prints the `*-autopilot` checkouts
 instead. A checkout is never a candidate because it holds `.specify/`. The
-remote's user information is dropped. One `candidate` line gives
-`AP=<path>` and `AP_REPO=<owner/name>`; zero or several mean ask.
+named repository and each remote keep only `<owner>/<name>`, the user
+information, query string, fragment and `.git` dropped, and print as
+`<withheld>` when that is not a GitHub-style `owner/name` or holds a known
+token prefix or a long mixed-case or hex string; a `<withheld>` name
+matches no checkout. One `candidate` line gives `AP=<path>` and
+`AP_REPO=<owner/name>`; zero, several or a `<withheld>` one mean ask.
 
 ```sh
+name() { awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ sub(/[?#].*/, ""); sub(/^[a-z+]+:\/\/[^\/]*\//, ""); sub(/^[^\/:]*:/, ""); sub(/\/+$/, ""); sub(/\.git$/, "") }
+NR == 1 { print (/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/ && !risky($0) ? $0 : "<withheld>") }'; }
 want=$(for f in AGENTS.md README.md ../AGENTS.md ../README.md; do [ -f "$f" ] && [ ! -L "$f" ] && cat "$f"; done | grep -i 'control repo' |
-  sed -E 's#(https?://|git@)github\.com[:/]##g' | grep -oE '[A-Za-z0-9-]+/[A-Za-z0-9_.-]+' | sed 's/\.git$//' | head -n 1)
+  sed -E 's#(https?://|git@)github\.com[:/]##g' | grep -oE '[A-Za-z0-9-]+/[A-Za-z0-9_.-]+' | name)
 [ -n "$want" ] && echo "named $want"
 for d in "$PWD" "$PWD"/* "${PWD%/*}" "${PWD%/*}"/* ${REPOS_DIR:+"$REPOS_DIR"/*}; do
   [ -e "$d/.git" ] || continue
-  r=$(git -C "$d" remote get-url origin 2>/dev/null | sed -E 's#^[a-z+]+://[^/]*/##; s#^[^/:]*:##; s#\.git/?$##')
-  if [ -n "$want" ]; then [ "$(echo "$r" | tr A-Z a-z)" = "$(echo "$want" | tr A-Z a-z)" ] || continue
+  r=$(git -C "$d" remote get-url origin 2>/dev/null | name)
+  if [ -n "$want" ]; then [ "$r" != "<withheld>" ] && [ "$(echo "$r" | tr A-Z a-z)" = "$(echo "$want" | tr A-Z a-z)" ] || continue
   else case "${d##*/}" in *-autopilot) ;; *) continue ;; esac; fi
   echo "candidate $d $r"
 done | sort -u
@@ -275,7 +310,8 @@ below follow the file's own indentation and print nothing but names. A job
 key, display name, environment or branch name outside letters, digits, spaces and
 `_ . / * + ! -`, or holding a known token prefix or a long mixed-case or hex
 string, prints as `<withheld>`, and a `${{ … }}` expression as
-`<expression>`; ask for those. Read job keys, job names and environment names (plain, quoted,
+`<expression>`; ask for those. A key may be quoted (`'jobs':`,
+`"environment":`). Read job keys, job names and environment names (plain, quoted,
 an inline `{name: …}` map, or `name:` anywhere in an `environment:` block)
 with:
 
@@ -287,9 +323,11 @@ awk 'function clean(v,   s, r) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#
   for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
     if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return "<withheld>" }
   return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
+BEGIN { q = sprintf("%c", 39) }
 { sub(/\r$/, "") }
 /^[[:space:]]*(#|$)/ { next }
-{ i = match($0, /[^ ]/) - 1; l = substr($0, i + 1) }
+{ i = match($0, /[^ ]/) - 1; l = substr($0, i + 1)
+  if (match(l, "^(\"[^\"]*\"|" q "[^" q "]*" q ")[[:space:]]*:")) { k = substr(l, 2, RLENGTH - 1); sub("[\"" q "][[:space:]]*:$", "", k); l = k ":" substr(l, RLENGTH + 1) } }
 i == 0 { j = (l ~ /^jobs:[[:space:]]*(#.*)?$/); ji = pi = ei = -1; next }
 !j { next }
 ei >= 0 && i > ei { if (l ~ /^name:/) print NR ": environment " clean(substr(l, 6)); next }
@@ -302,7 +340,7 @@ l ~ /^name:/ { print NR ": name " clean(substr(l, 6)); next }
 l !~ /^environment:/ { next }
 { v = clean(substr(l, 13)) }
 v == "<withheld>" && substr(l, 13) ~ /^[[:space:]]*(#.*)?$/ { ei = i; next }
-v == "<withheld>" && match(l, /[{,][[:space:]]*name:[^,}]*/) { v = substr(l, RSTART, RLENGTH); sub(/^[{,][[:space:]]*name:/, "", v); v = clean(v) }
+v == "<withheld>" && match(l, "[{,][[:space:]]*[\"" q "]?name[\"" q "]?[[:space:]]*:[^,}]*") { v = substr(l, RSTART, RLENGTH); sub("^[{,][[:space:]]*[\"" q "]?name[\"" q "]?[[:space:]]*:", "", v); v = clean(v) }
 { print NR ": environment " v }' <file>
 ```
 
