@@ -58,7 +58,7 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
 ## CI and deploy files
 
 List tracked files only, for example with
-`git ls-files -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml`
+`git ls-files -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml azure-pipelines.yml bitbucket-pipelines.yml .travis.yml '.buildkite/*'`
 and
 `git ls-files -- '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
 
@@ -73,8 +73,10 @@ and
 | no CI file | `none` |
 
 If files from several CI systems are present, list them all and ask which
-one gates pull requests. Gates are the job names under `jobs:`. Read
-jobs and environments with
+one gates pull requests. Gates are the job names under `jobs:` of the
+workflows triggered by `pull_request` (not deploy, release or scheduled
+jobs). For another CI system, list its job or stage names and propose the
+trigger as a question. Read GitHub Actions jobs and environments with
 `sed -n '/^jobs:/,$p' <file> | grep -nE '^ {2}[A-Za-z0-9_-]+:[[:space:]]*$|^ {4}(name|environment):|^ {6}name:'`.
 Read triggers with
 `sed -n "/^[\"']\{0,1\}on[\"']\{0,1\}:/,/^[a-z]/p" <file>`.
@@ -87,7 +89,7 @@ Read triggers with
 | `k8s/`, `helm/` | `kubernetes` |
 | `serverless.yml` | `serverless` |
 | `vercel.json`, `netlify.toml` | `static-site` |
-| `*.tf` | from the resource types: `google_cloud_run_*` → `cloud-run`, `*_instance` → `compute-vm` |
+| `*.tf` | from the resource types: `google_cloud_run_*` → `cloud-run`, `google_compute_instance`, `aws_instance` → `compute-vm` |
 | `app.yaml`, `fly.toml`, `render.yaml`, `Procfile`, or a `Dockerfile` alone | `other`, named in the target (App Engine, Fly.io, Render, Heroku) |
 
 Read Terraform resource types only, never variables:
@@ -115,21 +117,21 @@ Take names from these sources:
 - the branches `staging` and `production`.
 
 Read compose files with
-`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|profiles):|^ +build: [^{]*$' <file> | grep -v '@'`
-(services, images, the `Dockerfile`s they build, profiles; never a line
-with user information or inline build arguments).
+`grep -nE -A3 '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|profiles):|^ +build: [^{]*$' <file> | grep -E '^[0-9]+:|^[0-9]+-[[:space:]]+- [A-Za-z0-9_-]+$' | grep -v '://[^/ ]*@'`
+(services, images, the `Dockerfile`s they build, profiles in either form;
+never a line with user information or inline build arguments).
 Never read their `environment:` blocks. If no source names an environment,
 propose `none`.
 
 ## Services and data stores
 
-Print package names, not whole manifests, because URLs, scripts and
-config blocks can carry a token. For `package.json` use
+Print package names, not whole manifests, because URLs, scripts, authors
+and config blocks can carry a token or an internal address. For `package.json` use
 `jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and for
 `composer.json` the same over `require` and `require-dev`. For
 `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
 `pubspec.yaml` and `*.csproj` use
-`grep -viE '://|index-url|registry|password|secret|token *=' <file>`.
+`grep -viE '://|index-url|registry|@|(key|token|secret|passw|auth)[A-Za-z_-]* *[=:]' <file>`.
 Match a package by its name, without version or extras:
 `psycopg[binary]>=3` matches `psycopg`. A row ending in `*` matches by
 prefix.
@@ -154,13 +156,13 @@ prefix.
 
 | Driver package or compose image | Data store |
 |---|---|
-| `pg`, `psycopg`, `psycopg2`, `asyncpg`; image `postgres` | PostgreSQL |
-| `mysql2`, `mysqlclient`; image `mysql`, `mariadb` | MySQL, MariaDB |
-| `mongoose`, `pymongo`; image `mongo` | MongoDB |
+| `pg`, `psycopg*`, `asyncpg`; image `postgres` | PostgreSQL |
+| `mysql2`, `mysqlclient`, `pymysql`, `mysql-connector-*`; image `mysql`, `mariadb` | MySQL, MariaDB |
+| `mongoose`, `pymongo`, `motor`; image `mongo` | MongoDB |
 | `redis`, `ioredis`; image `redis` | Redis |
 | `sqlite3` | SQLite |
 | image `elasticsearch`, `rabbitmq` | Elasticsearch, RabbitMQ |
-| `@prisma/*` | `grep -nE '^[[:space:]]*provider[[:space:]]*=' schema.prisma` |
+| `@prisma/*` | `grep -nE '^[[:space:]]*provider[[:space:]]*=' $(git ls-files -- '*schema.prisma')` |
 
 ## Environment key names
 

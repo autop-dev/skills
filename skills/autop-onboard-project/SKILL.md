@@ -115,8 +115,9 @@ the control repository, and the next step: file the first story with
 - Nothing from an environment file beyond key names reaches the profile or
   the transcript: open only `.env.example`, `.env.sample`, `.env.template`
   and `.env.dist`, read names only, never a value, and never open `.env`,
-  `.env.local`, `.env.production`, `*.pem`, `*.key`, `secrets*` or
-  `credentials*`. No credential, URL with user information or query string,
+  `.env.local`, `.env.production`, `*.pem`, `*.key`, `secrets*`,
+  `credentials*` or the other files listed in
+  [references/discovery.md](references/discovery.md). No credential, URL with user information or query string,
   or internal hostname the person did not volunteer goes into the profile
   ([references/profile-format.md](references/profile-format.md), "What must
   never appear").
