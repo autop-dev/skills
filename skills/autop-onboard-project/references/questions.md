@@ -27,6 +27,16 @@ Enter or "yes" keeps the default; a number or a name changes it.
   when the checkout suggests otherwise; never argue. A value outside an
   enumeration is recorded as `other` and the person's words go into the
   matching prose section.
+- **A list is one question.** Questions 6 to 8 each show every entry the
+  evidence (or the stored profile) gives, numbered, with its proposed
+  values, and take one answer for the whole list: Enter or "yes" keeps it;
+  a number with a field and a value corrects that entry (`1 trigger tag`);
+  `drop 1` drops it; `add` with the fields adds one (`add Sentry errors`).
+  Several changes go in one answer, comma-separated. Only a required field
+  an answer leaves out is asked after it. There is no per-entry question
+  and no separate "another?" question, so a repository with one CI
+  workflow and one deploy manifest is asked at most eight questions
+  (1–3 and 5–9; question 4 is stated) when the defaults are kept (SC-001).
 - Every answer passes the refusal rule below before it is kept.
 
 ## The questions, in order
@@ -39,11 +49,10 @@ Enter or "yes" keeps the default; a number or a name changes it.
 | 3 | Branching model, release-branch glob, tag glob | the model rule in [discovery.md](discovery.md) "Branches"; `"v*"` when `v*` tags exist | 1. trunk 2. git-flow 3. release-branches 4. other | `branches.model`, `branches.release_pattern` (only for release-branches, default `"release/*"`), `branches.tags` (only when releases are tagged) |
 | 4 | CI system and its files | the system whose files were found, else `none` | 1. github-actions 2. gitlab-ci 3. jenkins 4. cloud-build 5. circleci 6. other 7. none | `ci.system`, `ci.config` (the files found; the person may add or drop paths; a system other than `none` with no file found → ask for the paths, required; left out for `none`) |
 | 5 | Checks a pull request must pass | the job and required-check names from the evidence | the names, numbered; "all", numbers, or "none" | `ci.gates` (left out for none) |
-| 6 | Each deploy target: name, kind, config, trigger (one question per target, then "another target?") | the evidence row: kind from the manifest, trigger from the workflow | kind: 1. firebase-hosting 2. cloud-run 3. compute-vm 4. kubernetes 5. docker-compose 6. serverless 7. static-site 8. app-store 9. package-registry 10. other; trigger: 1. push-to-release 2. tag 3. manual 4. other | `deploy[]`: `name`, `kind`, `config`, `trigger`; "nothing is deployed" → `[]` |
-| 7 | Each environment: name, branch it follows, public URL (one per environment, then "another?") | names from workflow `environment:` keys; branch the release branch for `production`; URL none, never guessed | the long-lived branches for the branch | `environments[]`: `name`, `branch`, `url` (optional keys left out when unanswered) |
-| 8 | Each service hint: confirm or correct its name and purpose; then "a service missing?" with name and purpose | the name and purpose from the evidence table | 1. keep 2. correct 3. drop | `services[]`: `name`, `purpose`, `evidence` (the package or key *name* that showed it; none for an added one) |
-| 9 | Each data store: confirm name and purpose, managing service; then "a store missing?" | the evidence's name; purpose `primary store` for the first; `managed_by` none | 1. keep 2. correct 3. drop | `data_stores[]`: `name`, `purpose`, `managed_by` |
-| 10 | Anything else to record (who deploys, release checklist, freeze windows)? | nothing; on a re-run the stored `## Notes` text is kept and an answer is appended below it | free text | `## Notes` |
+| 6 | Deploy targets and environments, one list: each target's name, kind, config, trigger and each environment's name, branch it follows, public URL; correct, drop or add in the same answer | the evidence rows: kind from the manifest, trigger from the workflow; environment names from workflow `environment:` keys, branch the release branch for `production`, URL none, never guessed | kind: 1. firebase-hosting 2. cloud-run 3. compute-vm 4. kubernetes 5. docker-compose 6. serverless 7. static-site 8. app-store 9. package-registry 10. other; trigger: 1. push-to-release 2. tag 3. manual 4. other; the long-lived branches for an environment's branch | `deploy[]`: `name`, `kind`, `config`, `trigger` ("nothing is deployed" → `[]`); `environments[]`: `name`, `branch`, `url` (optional keys left out when unanswered) |
+| 7 | Service hints, one list: keep, correct or drop each name and purpose, add a missing service with its purpose, in the same answer | the name and purpose from the evidence table | keep, a correction, `drop`, `add` | `services[]`: `name`, `purpose`, `evidence` (the package or key *name* that showed it; none for an added one) |
+| 8 | Data stores, one list: keep, correct or drop each name, purpose and managing service, add a missing store, in the same answer | the evidence's name; purpose `primary store` for the first; `managed_by` none | keep, a correction, `drop`, `add` | `data_stores[]`: `name`, `purpose`, `managed_by` |
+| 9 | Anything else to record (who deploys, release checklist, freeze windows)? | nothing; on a re-run the stored `## Notes` text is kept and an answer is appended below it | free text | `## Notes` |
 
 The skill writes the four factual prose sections from the answers, one or
 two sentences each, in the person's terms; a section with nothing to say
@@ -109,23 +118,63 @@ once the control repository's pull request merges.
   entry the person kept or corrected (renamed included); a dropped entry's
   keys go with it, named in the write list.
 - **Kept verbatim:** the `## Notes` text, never edited (a new answer to
-  question 10 is appended below it; a lone "Nothing recorded." gives way to
+  question 9 is appended below it; a lone "Nothing recorded." gives way to
   it); front matter keys the contract does not name, after the known keys
   of their mapping. Step 3 copies both with one script that re-fetches the
   raw file (the first line of the Step 1 command, `gh api …` or `git show`,
   not the filter: a shell variable does not outlive its call), takes the
   YAML of the unknown keys and the Notes text from it, and writes the new
   file without printing it. When an open pull request's branch is updated
-  (below), the stored file is the one on `origin/<branch>` (`git show`
-  form), for the defaults as well as for Notes and unknown keys. The
-  profile shown in Step 3 prints the Notes as "(kept verbatim, N lines)"
-  and unknown keys as the filter prints them; an unknown key the filter
-  printed as `<withheld>` is dropped, not copied, and named in the write
-  list.
+  (below), `git -C <checkout> fetch origin <branch>` runs as soon as the
+  person chooses it, before any default is read, and again in Step 3
+  before the script re-fetches; the stored file is the one on the fetched
+  `origin/<branch>` (`git show` form:
+  `p=$(git -C "$AP" show origin/<branch>:profile/<repo>.md) &&`), for the
+  defaults as well as for Notes and unknown keys. The profile shown in
+  Step 3 prints the Notes as "(kept verbatim, N lines)" and unknown keys
+  as the filter prints them, so a value is never shown.
+- **Which unknown keys are copied** is decided by the check below, run on
+  the same raw file (`p` from the same first line, in the same call). It
+  prints one `keep <path>` or `drop <path>` line per unknown key, never a
+  value. `drop` means the key or a value under it fails the filter's
+  credential test (the same `risky`): it is left out and named in the
+  write list. A key the filter withholds only for its name (`monkey_tests`
+  holds `KEY`) is `keep`: copied verbatim, still shown as `<withheld>`, and
+  named in the write list as "kept, value not shown".
+
+```sh
+printf '%s\n' "$p" | python3 -E -c '
+import sys; sys.path[:] = [x for x in sys.path if x not in ("", ".")]
+import re, yaml
+t = sys.stdin.read().replace("\r\n", "\n").split("\n")
+d = yaml.safe_load("\n".join(t[1:t.index("---", 1)]))
+KNOWN = {"": "profile repository updated branches ci deploy environments services data_stores", "branches": "default release develop model release_pattern tags",
+    "ci": "system config gates", "deploy": "name kind config trigger", "environments": "name branch url", "services": "name purpose evidence",
+    "data_stores": "name purpose managed_by"}
+def risky(s):
+    return bool(re.search(r"://[^/\s]*@|://\S*#|\?|-----BEGIN|PRIVATE KEY|[A-Za-z_]\w*=\S|(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)", s)) or any(
+        len(r) >= 24 and re.search("[0-9]", r) and re.search("[a-z]", r) and re.search("[A-Z]", r) or len(r) >= 32 and re.fullmatch("[0-9A-Fa-f]+", r)
+        for r in re.findall(r"[A-Za-z0-9+/=_-]+", s))
+def bad(v, up=()):
+    if id(v) in up: return False
+    if isinstance(v, dict): return any(bad(k) or bad(x, up + (id(v),)) for k, x in v.items())
+    if isinstance(v, list): return any(bad(x, up + (id(v),)) for x in v)
+    return v is not None and risky(str(v))
+def unknown(path, v, known):
+    for k, x in v.items() if isinstance(v, dict) else ():
+        if str(k) not in known.split(): print(("drop " if bad(k) or bad(x) else "keep ") + path + ("<withheld>" if risky(str(k)) else str(k)))
+unknown("", d, KNOWN[""])
+for key in ("branches", "ci"): unknown(key + ".", d.get(key), KNOWN[key])
+for key in ("deploy", "environments", "services", "data_stores"):
+    for i, x in enumerate(d.get(key) if isinstance(d.get(key), list) else ()): unknown("%s[%d]." % (key, i), x, KNOWN[key])'
+```
+
 - **`updated`** is set to today. A repository whose file would not change
-  (the same `AGENTS.md` section; a profile identical but for `updated`) is
-  left out of the write list and said so; nothing changes → nothing to
-  write.
+  is left out of the write list and said so: the same `AGENTS.md` section,
+  or a complete assembled profile, `updated` included, byte for byte the
+  stored file. A stored `updated` from an
+  earlier day is a change, so revisiting an otherwise unchanged profile
+  writes it with today's date; nothing changes → nothing to write.
 - A stored profile whose version is not `1` or whose front matter does not
   parse is never overwritten (Step 1 stops).
 - An existing `## Branches and delivery` section in `AGENTS.md` is replaced
@@ -138,8 +187,10 @@ once the control repository's pull request merges.
   (`git worktree add -B <branch> <tmp> origin/<branch>`, apply the new
   files, commit, push; no new pull request), or a new branch. On `origin`
   without an open pull request (merged or closed), or a new branch chosen
-  → the first free name of `<branch>-2`, `<branch>-3`, …. The write list
-  then names the branch that will be used; nothing is asked after the yes.
+  → the first free name of `<branch>-2`, `<branch>-3`, …. Updating the
+  branch fetches it at once (above), before the interview reads defaults.
+  The write list then names the branch that will be used; nothing is asked
+  after the yes.
   A local branch of that name with commits not on its base (`origin/<branch>`
   when it exists, else `origin/<default>`) → show
   `git log --oneline <base>..<branch>` and ask, also before the interview,
