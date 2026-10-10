@@ -199,7 +199,7 @@ jobs); `gh api repos/$REPO/rules/branches/<default>` and
 show required checks when the login can read them. For another CI system, list its job or stage
 names and ask for the gates and trigger. The two GitHub Actions commands
 below follow the file's own indentation and print nothing but names. A job
-display name, environment or branch name outside letters, digits, spaces and
+key, display name, environment or branch name outside letters, digits, spaces and
 `_ . / * + ! -`, or holding a known token prefix or a long mixed-case or hex
 string, prints as `<withheld>`, and a `${{ … }}` expression as
 `<expression>`; ask for those. Read job keys, job names and environment names (plain, quoted,
@@ -222,7 +222,7 @@ i == 0 { j = (l ~ /^jobs:[[:space:]]*(#.*)?$/); ji = pi = ei = -1; next }
 ei >= 0 && i > ei { if (l ~ /^name:/) print NR ": environment " clean(substr(l, 6)); next }
 { ei = -1 }
 ji < 0 { ji = i }
-i == ji { if (l ~ /^[A-Za-z0-9_-]+:[[:space:]]*(#.*)?$/) { sub(/:.*/, "", l); print NR ": job " l }; pi = -1; next }
+i == ji { if (l ~ /^[A-Za-z0-9_-]+:[[:space:]]*(#.*)?$/) { sub(/:.*/, "", l); print NR ": job " clean(l) }; pi = -1; next }
 pi < 0 { pi = i }
 i != pi { next }
 l ~ /^name:/ { print NR ": name " clean(substr(l, 6)); next }
@@ -289,9 +289,11 @@ The trigger follows that workflow's `on:` section:
 
 Take names from these sources:
 
-- workflow `environment:` keys, and
-  `gh api repos/$REPO/environments --jq '.environments[].name'` when the
-  login can read them;
+- workflow `environment:` keys, and the repository's environments when
+  the login can read them (a name outside letters, digits, spaces and
+  `_ . / * + ! -`, or holding a known token prefix or a long mixed-case or
+  hex string, prints as `<withheld>`):
+  `gh api repos/$REPO/environments --jq '.environments[].name | if test("^[A-Za-z0-9_./*+! -]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end'`;
 - `firebase.json` hosting `target` and `site` names, read structurally
   (no other value is printed, and a name outside letters, digits and
   `_ . -`, or holding a known token prefix or a long mixed-case or hex
@@ -368,10 +370,17 @@ propose `none`.
 ## Services and data stores
 
 Print package names, never whole manifests: URLs, scripts, authors and
-config blocks can carry a token or an internal address. For `package.json`
-use `jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and
-for `composer.json` use `jq -r '(.require // {}), (.["require-dev"] // {}) | keys[]'`. For
-`requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
+config blocks can carry a token or an internal address. Read the
+dependency names of `package.json` and `composer.json` with the commands
+below; a name outside letters, digits and `@ / _ . -`, or holding a known
+token prefix or a long mixed-case or hex string, prints as `<withheld>`:
+
+```sh
+jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; (.dependencies // {}), (.devDependencies // {}) | keys[] | safe' <package.json>
+jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; (.require // {}), (.["require-dev"] // {}) | keys[] | safe' <composer.json>
+```
+
+For `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
 `pubspec.yaml` and `*.csproj` (list them with
 `git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`
 through the guard), print only the table names they contain:

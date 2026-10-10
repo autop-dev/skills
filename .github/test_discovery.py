@@ -52,6 +52,8 @@ ENV_NAMES = fenced("awk 'function closes(")
 PRISMA = fenced("git grep -hE '^[[:space:]]*provider")
 GUARD = fenced('while IFS= read -r f;')
 MANIFESTS = inline("git ls-files -- ':(exclude).github/*'")
+GH_ENVIRONMENTS = inline('gh api repos/$REPO/environments --jq ')
+PACKAGE_JSON, COMPOSER_JSON = fenced("jq -r 'def safe:").splitlines()
 
 WORKFLOW = """\
 name: Deploy
@@ -124,6 +126,30 @@ class WorkflowTest(unittest.TestCase):
                                  'name <withheld>'])
         self.assertNotIn('secret', result.stdout)
         self.assertNotIn('Ab1Cd2', result.stdout)
+
+    def test_job_ids_are_masked(self):
+        result = on_file(JOBS, 'jobs:\n  lint:\n    name: Lint\n  ghp_jobCredential:\n    name: Test\n'
+                               '  Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9:\n    runs-on: ubuntu-latest\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['2: job lint', '3: name Lint', '4: job <withheld>', '5: name Test',
+                                                      '6: job <withheld>'])
+        self.assertNotIn('Credential', result.stdout)
+        self.assertNotIn('Ab1Cd2', result.stdout)
+
+    @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
+    def test_api_environment_names_are_masked(self):
+        """The `gh api … --jq` filter, run by jq on a recorded response."""
+        self.assertTrue(GH_ENVIRONMENTS.startswith("gh api repos/$REPO/environments --jq '"))
+        response = ('{"total_count":6,"environments":[{"name":"production","protection_rules":[]},{"name":"Preview 2"},'
+                    '{"name":"ghp_envCredential"},{"name":"Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9"},'
+                    '{"name":"0123456789abcdef0123456789abcdef"},{"name":"prod@odd-name-secret"}]}')
+        command = GH_ENVIRONMENTS.replace('gh api repos/$REPO/environments --jq', 'jq -r', 1) + ' <file>'
+        result = on_file(command, response, 'environments.json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         ['production', 'Preview 2', '<withheld>', '<withheld>', '<withheld>', '<withheld>'])
+        self.assertNotIn('Credential', result.stdout)
+        self.assertNotIn('secret', result.stdout)
 
     def test_any_indentation(self):
         result = on_file(JOBS, FOUR_SPACE)
@@ -262,6 +288,29 @@ volumes:
                          ['hosting target=prod site=acme-prod', 'hosting target=<withheld> site=',
                           'hosting target=<withheld> site=<withheld>', 'hosting target=staging site=<withheld>'])
         self.assertNotIn('secret', result.stdout.lower())
+
+    @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
+    def test_package_names_are_masked(self):
+        package = ('{"name":"app","scripts":{"build":"TOKEN=script-secret npm run build"},'
+                   '"dependencies":{"stripe":"^14","@sentry/node":"^8","ghp_packageCredential":"1",'
+                   '"git+https://user:pw-secret@example.com/x":"1"},'
+                   '"devDependencies":{"Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9":"1","pg":"^8"}}')
+        result = on_file(PACKAGE_JSON.replace('<package.json>', '<file>'), package, 'package.json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         ['@sentry/node', '<withheld>', '<withheld>', 'stripe', '<withheld>', 'pg'])
+        composer = ('{"require":{"php":">=8.2","stripe/stripe-php":"^13","acme/sk-composerCredential":"1"},'
+                    '"require-dev":{"0123456789abcdef0123456789abcdef":"1","phpunit/phpunit":"^11",'
+                    '"vendor/Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9":"1"},'
+                    '"config":{"github-oauth":{"github.com":"composer-config-secret"}}}')
+        result = on_file(COMPOSER_JSON.replace('<composer.json>', '<file>'), composer, 'composer.json')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(),
+                         ['<withheld>', 'php', 'stripe/stripe-php', '<withheld>', 'phpunit/phpunit',
+                          '<withheld>'])
+        self.assertNotIn('Credential', result.stdout)
+        self.assertNotIn('Ab1Cd2', result.stdout)
+        self.assertNotIn('secret', result.stdout)
 
     def test_symlinked_and_forbidden_manifests_are_not_opened(self):
         """A tracked `compose.yml` that points at `.env`, and other paths the guard keeps every read from."""
