@@ -41,15 +41,17 @@ def on_file(command, text, name='file.yml'):
 JOBS = fenced("awk 'function clean(v,", 'jobs:')
 TRIGGERS = fenced("awk 'function clean(v,", 'function each(')
 COMPOSE = fenced("awk '{ sub(/\\r$/, \"\") }", 'services:')
-COMPOSE_PROFILES = fenced("awk 'function out(v)")
+COMPOSE_PROFILES = fenced("awk 'function out(v,")
 PROFILE = fenced('p=$(gh api ')
 PROFILE_OFFLINE = inline('p=$(git -C "$AP" show')
 CONTROL = fenced('want=$(')
 MERGE = fenced("printf '%s\\n' \"$defaults\"")
 FIREBASE = inline("jq -r 'def safe:")
 ENV_FILES = inline("git ls-files -- '*.env.example'")
-ENV_NAMES = fenced('f=<file>;')
+ENV_NAMES = fenced("awk 'function closes(")
 PRISMA = fenced("git grep -hE '^[[:space:]]*provider")
+GUARD = fenced('while IFS= read -r f;')
+MANIFESTS = inline("git ls-files -- ':(exclude).github/*'")
 
 WORKFLOW = """\
 name: Deploy
@@ -162,13 +164,21 @@ services:
   odd:
     image: postgres:17 PASSWORD=image-value-secret
     build: ./odd # TOKEN=build-comment-secret
+  tagged:
+    image: acme/app:ghp_composeTagSecret
+    build: ./Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9
+  ghp_serviceNameSecret:
+    image: postgres:17@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 """)
         self.assertEqual(result.stdout.splitlines(), [
             '2:  app:', '3:    build: <withheld>', '4:    image: <registry>/org/app:1', '5:  worker:',
             '6:    build: ./worker', '7:  remote:', '8:    build: <withheld>', '9:  db:',
-            '10:    image: postgres:17@sha256:abc', '13:  cache:', '14:    image: redis:7', '15:  odd:',
-            '16:    image: <withheld>', '17:    build: ./odd'])
-        self.assertNotIn('secret', result.stdout)
+            '10:    image: postgres:17@sha256:<digest>', '13:  cache:', '14:    image: redis:7', '15:  odd:',
+            '16:    image: <withheld>', '17:    build: ./odd', '18:  tagged:', '19:    image: <withheld>',
+            '20:    build: <withheld>', '21:  <withheld>:', '22:    image: postgres:17@sha256:<digest>'])
+        self.assertNotIn('secret', result.stdout.lower())
+        self.assertNotIn('Ab1Cd2', result.stdout)
+        self.assertNotIn('0123', result.stdout)
 
     def test_compose_reads_service_fields_only(self):
         result = on_file(COMPOSE, """\
@@ -203,30 +213,82 @@ volumes:
 
     def test_compose_profile_names_only(self):
         result = on_file(COMPOSE_PROFILES, """\
+x-common: &common
+  profiles: [anchor-profile-secret]
 services:
   app:
     profiles: [prod, "dev"] # TOKEN=inline-profile-secret
     image: app
+    environment:
+      profiles: env-profile-secret
+    labels:
+      profiles:
+        - label-profile-secret
   backup:
     profiles:
       - backup # PASSWORD=list-profile-secret
       - 'odd name!'
+      - ghp_listProfileSecret
+      - Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9
     environment:
       - KEY=after-profiles-secret
+  worker:
+    profiles:
+    - jobs
+    - sk-sameIndentSecret
+    deploy:
+      profiles: [deploy-profile-secret]
+volumes:
+  data:
+    profiles: [volume-profile-secret]
 """)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.splitlines(), ['3: profile prod', '3: profile dev', '7: profile backup',
-                                                      '8: profile <withheld>'])
+        self.assertEqual(result.stdout.splitlines(), [
+            '5: profile prod', '5: profile dev', '14: profile backup', '15: profile <withheld>',
+            '16: profile <withheld>', '17: profile <withheld>', '22: profile jobs', '23: profile <withheld>'])
+        self.assertNotIn('secret', result.stdout.lower())
+        self.assertNotIn('Ab1Cd2', result.stdout)
 
     @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
     def test_firebase_hosting_names_only(self):
         minified = ('{"hosting":[{"target":"prod","site":"acme-prod","headers":[{"source":"**","headers":'
-                    '[{"key":"Authorization","value":"Bearer firebase-header-secret"}]}]},{"target":"bad name!"}],'
+                    '[{"key":"Authorization","value":"Bearer firebase-header-secret"}]}]},{"target":"bad name!"},'
+                    '{"target":"ghp_firebaseTargetSecret","site":"Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9"},'
+                    '{"target":"staging","site":"0123456789abcdef0123456789abcdef"}],'
                     '"functions":{"predeploy":["TOKEN=firebase-command-secret npm run build"]}}')
         result = on_file(FIREBASE, minified, 'firebase.json')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(),
-                         ['hosting target=prod site=acme-prod', 'hosting target=<withheld> site='])
+                         ['hosting target=prod site=acme-prod', 'hosting target=<withheld> site=',
+                          'hosting target=<withheld> site=<withheld>', 'hosting target=staging site=<withheld>'])
+        self.assertNotIn('secret', result.stdout.lower())
+
+    def test_symlinked_and_forbidden_manifests_are_not_opened(self):
+        """A tracked `compose.yml` that points at `.env`, and other paths the guard keeps every read from."""
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            git_repo(Path(tmp) / 'app', 'https://github.com/acme/app.git', commit={
+                '.env': 'services:\n  ghp_envServiceSecret:\n    image: env-image-secret\n',
+                'deploy/Dockerfile': 'FROM node:22\n', 'secrets-compose.yml': 'services:\n  forbidden-name-secret:\n'})
+            app = Path(tmp) / 'app'
+            (app / 'compose.yml').symlink_to('.env')
+            (app / 'deploy/docker-compose.yml').symlink_to('../.env')
+            (app / 'linked').symlink_to(outside)
+            (Path(outside) / 'compose.yml').write_text('services:\n  outside-service-secret:\n')
+            git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-C', str(app)]
+            subprocess.run(git + ['add', 'compose.yml', 'deploy/docker-compose.yml'], check=True)
+            subprocess.run(git + ['commit', '-qm', 'symlinks'], check=True)
+            for path in (app / '.env', app / 'secrets-compose.yml', Path(outside) / 'compose.yml'):
+                path.chmod(0)  # any read of these files now fails loudly on stderr
+
+            listed = run(f"{{ {MANIFESTS}; echo linked/compose.yml; }} | {GUARD}", cwd=app)
+            self.assertEqual((listed.returncode, listed.stderr), (0, ''))
+            self.assertEqual(listed.stdout.splitlines(), [
+                'skipped compose.yml: not opened', 'deploy/Dockerfile', 'skipped deploy/docker-compose.yml: not opened',
+                'skipped secrets-compose.yml: not opened', 'skipped linked/compose.yml: not opened'])
+            opened = [line for line in listed.stdout.splitlines() if not line.startswith('skipped ')]
+            self.assertEqual(opened, ['deploy/Dockerfile'])
+            for path in (app / '.env', app / 'secrets-compose.yml', Path(outside) / 'compose.yml'):
+                path.chmod(0o600)
 
 
 EXAMPLE_VALUES = [
@@ -348,6 +410,12 @@ class ControlRepositoryTest(unittest.TestCase):
         (self.api / 'README.md').write_text('Control repository: https://github.com/acme/control.git\n')
         self.assertEqual(self.candidates(), ['named acme/control', f'candidate {self.ws}/control Acme/Control'])
 
+    def test_symlinked_readme_is_not_opened(self):
+        (self.api / '.env').write_text('Control repository: acme/env-control-secret\n')
+        (self.api / 'README.md').unlink()
+        (self.api / 'README.md').symlink_to('.env')
+        self.assertEqual(self.candidates(), [f'candidate {self.ws}/acme-autopilot acme/acme-autopilot'])
+
     def test_autopilot_sibling_otherwise_and_several_mean_ask(self):
         self.assertEqual(self.candidates(), [f'candidate {self.ws}/acme-autopilot acme/acme-autopilot'])
         git_repo(self.ws / 'repos/beta-autopilot', 'git@github.com:acme/beta-autopilot.git')
@@ -392,7 +460,9 @@ class PrismaTest(unittest.TestCase):
                 'datasource db {\n  provider = "postgresql" // DATABASE_URL=postgres://u:comment-pw-secret@db/app\n'
                 '  url      = env("DATABASE_URL")\n}\n'
                 'datasource other {\n  provider = "sk-provider-secret"\n}\n')})
-            result = run(PRISMA, cwd=Path(tmp) / 'app')
+            listed = run(f"git ls-files -- '*.prisma' | {GUARD}", cwd=Path(tmp) / 'app')
+            self.assertEqual(listed.stdout.splitlines(), ['prisma/schema.prisma'])
+            result = run(PRISMA.replace('<files>', listed.stdout.strip()), cwd=Path(tmp) / 'app')
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(result.stdout.splitlines(),
                              ['provider prisma-client-js', 'provider postgresql', 'provider <withheld>'])
@@ -420,7 +490,7 @@ class EnvironmentKeyNamesTest(unittest.TestCase):
             for path in forbidden:
                 path.chmod(0)  # any read of a forbidden file now fails loudly on stderr
 
-            listed = run(ENV_FILES, cwd=tmp)
+            listed = run(f'{ENV_FILES} | {GUARD}', cwd=tmp)
             self.assertEqual(listed.returncode, 0, listed.stderr)
             self.assertEqual(listed.stdout.splitlines(), ['.env.example', 'deploy/.env.sample'])
             names = []
@@ -438,7 +508,7 @@ class EnvironmentKeyNamesTest(unittest.TestCase):
             self.assertEqual((Path(tmp) / '.env').read_text(), 'STRIPE_SECRET_KEY=must-never-appear\n')
 
     def test_multiline_quoted_values_are_not_keys(self):
-        result = on_file(ENV_NAMES.replace('f=<file>;', 'cd "$(dirname <file>)" && f=<file>;'), (
+        result = on_file(ENV_NAMES, (
             'PRIVATE_KEY="-----BEGIN KEY-----\nabc123TOKEN=\n  ESCAPED=\\" still-inside\n-----END KEY-----"\n'
             "SINGLE='first\nSINGLEVALUE=line\n'\n"
             'TICK=`one\nTICKVALUE=two`\n'
@@ -461,12 +531,11 @@ class EnvironmentKeyNamesTest(unittest.TestCase):
             (Path(tmp) / 'linked').symlink_to(outside)
             (Path(tmp) / '.env').chmod(0)  # any read of the forbidden file now fails loudly on stderr
 
-            listed = run(ENV_FILES, cwd=tmp)
-            self.assertEqual(listed.stdout.splitlines(), ['.env.example', 'deploy/.env.sample'])
-            for file in listed.stdout.splitlines() + ['linked/.env.dist']:
-                result = run(ENV_NAMES.replace('<file>', shlex.quote(file)), cwd=tmp)
-                self.assertEqual((result.returncode, result.stderr), (0, ''))
-                self.assertEqual(result.stdout, f'skipped {file}: not a regular file in the checkout\n')
+            listed = run(f'{{ {ENV_FILES}; echo linked/.env.dist; }} | {GUARD}', cwd=tmp)
+            self.assertEqual((listed.returncode, listed.stderr), (0, ''))
+            self.assertEqual(listed.stdout.splitlines(), ['skipped .env.example: not opened',
+                                                          'skipped deploy/.env.sample: not opened',
+                                                          'skipped linked/.env.dist: not opened'])
             (Path(tmp) / '.env').chmod(0o600)
 
 

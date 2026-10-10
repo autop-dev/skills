@@ -52,21 +52,40 @@ END { for (i = 1; i <= n; i++) { k = o[i]
   if (k in pv) print k ": " pv[k] " (profile)" ((k in cv) && cv[k] != pv[k] ? ", checkout: " cv[k] : ""); else print k ": " cv[k] } }'
 ```
 
+## Opening files
+
+Every command below that opens a checkout file (a workflow, a deploy or
+package manifest, a Prisma schema, `.firebaserc`, an example environment
+file) opens only a path that this guard printed. Pipe each `git ls-files`
+listing into it. It prints each path that is a regular file, not a symlink,
+in a directory inside the checkout, and not a forbidden name; any other
+path prints one `skipped` line instead (a tracked `compose.yml` or
+`.env.example` can point at `.env`). List skipped paths as "not opened".
+
+```sh
+while IFS= read -r f; do d=$(CDPATH= cd -- "$(dirname -- "$f")" 2>/dev/null && pwd -P)
+  case "$d/" in "$(pwd -P)/"*) ;; *) d= ;; esac
+  case "${f##*/}" in secrets*|credentials*) d= ;; *.env.example|*.env.sample|*.env.template|*.env.dist) ;;
+    .env*|*.pem|*.key|*.p12|.npmrc|.pypirc|.netrc|id_rsa*|id_ed25519*|kubeconfig*|*.tfstate*|*.tfvars) d= ;; esac
+  if [ -z "$d" ] || [ -L "$f" ] || [ ! -f "$f" ]; then echo "skipped $f: not opened"; else printf '%s\n' "$f"; fi
+done
+```
+
 ## Control repository
 
 List the checkouts that can be `$AP` (SKILL.md Step 1 item 2) with the
 command below, run from the product checkout. It takes the first
 `owner/name` on a line of `AGENTS.md` or `README.md` (the checkout's or its
-parent's) that mentions the control repository, prints it as `named`, and
-prints each git checkout at or under the current directory, its parent, or
-`$REPOS_DIR` whose `origin` is that repository (case-insensitively). With no
-name, it prints the `*-autopilot` checkouts instead. A checkout is never a
-candidate because it holds `.specify/`. The remote's user information is
-dropped. One `candidate` line gives `AP=<path>` and `AP_REPO=<owner/name>`;
-zero or several mean ask.
+parent's; a symlink is not opened) that mentions the control repository,
+prints it as `named`, and prints each git checkout at or under the current
+directory, its parent, or `$REPOS_DIR` whose `origin` is that repository
+(case-insensitively). With no name, it prints the `*-autopilot` checkouts
+instead. A checkout is never a candidate because it holds `.specify/`. The
+remote's user information is dropped. One `candidate` line gives
+`AP=<path>` and `AP_REPO=<owner/name>`; zero or several mean ask.
 
 ```sh
-want=$(cat AGENTS.md README.md ../AGENTS.md ../README.md 2>/dev/null | grep -i 'control repo' |
+want=$(for f in AGENTS.md README.md ../AGENTS.md ../README.md; do [ -f "$f" ] && [ ! -L "$f" ] && cat "$f"; done | grep -i 'control repo' |
   sed -E 's#(https?://|git@)github\.com[:/]##g' | grep -oE '[A-Za-z0-9-]+/[A-Za-z0-9_.-]+' | sed 's/\.git$//' | head -n 1)
 [ -n "$want" ] && echo "named $want"
 for d in "$PWD" "$PWD"/* "${PWD%/*}" "${PWD%/*}"/* ${REPOS_DIR:+"$REPOS_DIR"/*}; do
@@ -156,7 +175,8 @@ show("", d)'
 
 ## CI and deploy files
 
-List tracked files only, for example with
+List tracked files only, and pass each listing through the guard
+("Opening files"), for example with
 `git ls-files -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml azure-pipelines.yml bitbucket-pipelines.yml .travis.yml '.buildkite/*'`
 and
 `git ls-files -- ':(exclude).github/*' ':(exclude)*.md' '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
@@ -274,8 +294,9 @@ Take names from these sources:
   login can read them;
 - `firebase.json` hosting `target` and `site` names, read structurally
   (no other value is printed, and a name outside letters, digits and
-  `_ . -` prints as `<withheld>`):
-  `jq -r 'def safe: if type == "string" and test("^[A-Za-z0-9_.-]*$") then . else "<withheld>" end; if type == "object" and has("hosting") then [.hosting] | flatten[] | "hosting target=\(.target? // "" | safe) site=\(.site? // "" | safe)" else empty end' firebase.json`,
+  `_ . -`, or holding a known token prefix or a long mixed-case or hex
+  string, prints as `<withheld>`):
+  `jq -r 'def safe: if type == "string" and test("^[A-Za-z0-9_.-]*$") and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end; if type == "object" and has("hosting") then [.hosting] | flatten[] | "hosting target=\(.target? // "" | safe) site=\(.site? // "" | safe)" else empty end' firebase.json`,
   and the `.firebaserc` `projects` and `targets` aliases;
 - compose `profiles:`;
 - the branches `staging` and `production`.
@@ -287,8 +308,9 @@ and `dockerfile:` directly under a `build:` block; a key of the same name
 in `environment:`, `labels:`, `args:` or any other block is never read.
 Trailing comments are dropped. A value holding a URL, a space or `=`, and a
 `build:` or `dockerfile:` value holding `:`, `@` or `?` (a remote Git
-context can carry `user:token@`), prints as `<withheld>`; a registry host is
-replaced.
+context can carry `user:token@`), prints as `<withheld>`; a registry host
+and an image digest are replaced. A service name or value holding a known
+token prefix or a long mixed-case or hex string prints as `<withheld>`.
 
 ```sh
 awk '{ sub(/\r$/, "") }
@@ -303,18 +325,41 @@ fi < 0 { fi = i }
 i == fi { b = (l ~ /^build:[[:space:]]*(#.*)?$/); bi = -1; if (l ~ /^image:|^build:[[:space:]]+[^{[:space:]#]/) print NR ":" $0; next }
 !b || i < fi { next }
 bi < 0 { bi = i }
-i == bi && l ~ /^dockerfile:/ { print NR ":" $0 }' <file> | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'
+i == bi && l ~ /^dockerfile:/ { print NR ":" $0 }' <file> | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#; s#@sha256:[0-9a-f]+#@sha256:<digest>#' |
+awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ match($0, /^[0-9]+: +/); p = substr($0, 1, RLENGTH); l = substr($0, RLENGTH + 1); k = l; sub(/:.*/, "", k) }
+k ~ /^(image|build|dockerfile)$/ { if (risky(substr(l, length(k) + 2))) $0 = p k ": <withheld>" }
+k !~ /^(image|build|dockerfile)$/ { if (risky(l)) $0 = p "<withheld>:" }
+{ print }'
 ```
 
-Read profile names (inline or as a list; comments dropped, a name outside
-letters, digits and `_ . -` prints as `<withheld>`) with:
+Read profile names with the command below. Like the services command, it
+follows the file's own indentation and reads only each service's own
+`profiles:` under `services:`, inline or as a list; a `profiles` key in
+`environment:`, `labels:` or any other block is never read. Comments are
+dropped, and a name outside letters, digits and `_ . -`, or holding a known
+token prefix or a long mixed-case or hex string, prints as `<withheld>`:
 
 ```sh
-awk 'function out(v) { gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v); print NR ": profile " (v ~ /^[A-Za-z0-9_.-]+$/ ? v : "<withheld>") }
+awk 'function out(v,   s, r, w) { gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v); w = v !~ /^[A-Za-z0-9_.-]+$/
+  if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) w = 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) w = 1 }
+  print NR ": profile " (w ? "<withheld>" : v) }
 { sub(/\r$/, ""); l = $0; sub(/[[:space:]]+#.*$/, "", l); sub(/[[:space:]]+$/, "", l) }
-l ~ /^ +profiles:/ { p = 1; sub(/^ +profiles:/, "", l); gsub(/[][,]/, " ", l); n = split(l, t, " "); for (x = 1; x <= n; x++) out(t[x]); next }
-p && l ~ /^ +- / { sub(/^ +- +/, "", l); out(l); next }
-{ p = 0 }' <file>
+l ~ /^[[:space:]]*(#|$)/ { next }
+{ i = match(l, /[^ ]/) - 1; l = substr(l, i + 1) }
+i == 0 { s = (l ~ /^services:$/); si = -1; next }
+!s { next }
+si < 0 { si = i }
+i <= si { fi = -1; p = 0; next }
+fi < 0 { fi = i }
+p && (i > fi || l ~ /^- /) { if (l ~ /^- /) { sub(/^- +/, "", l); out(l) }; next }
+{ p = 0 }
+i == fi && l ~ /^profiles:/ { p = 1; sub(/^profiles:/, "", l); gsub(/[][,]/, " ", l); n = split(l, t, " "); for (x = 1; x <= n; x++) out(t[x]) }' <file>
 ```
 
 Never read `environment:`, `command:`, `secrets:` or `args:` blocks. If no source names an environment,
@@ -328,8 +373,8 @@ use `jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and
 for `composer.json` use `jq -r '(.require // {}), (.["require-dev"] // {}) | keys[]'`. For
 `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
 `pubspec.yaml` and `*.csproj` (list them with
-`git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`),
-print only the table names they contain:
+`git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`
+through the guard), print only the table names they contain:
 
 ```sh
 grep -ohiE '(^|[^a-z])(stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?)([^a-z]|$)' <files> | sort -u
@@ -368,39 +413,34 @@ prefix, and Go module paths or .NET packages that contain a row's name
 | image `elasticsearch`, `rabbitmq` | Elasticsearch, RabbitMQ |
 | `@prisma/*` | the `provider` names of the tracked `*.prisma` schemas, read with the command below |
 
-For Prisma, list the schemas with `git ls-files -- '*.prisma'` and print
-the provider names only. The rest of the line, a trailing comment included,
-is never printed, and a provider outside Prisma's own names prints as
+For Prisma, list the schemas with `git ls-files -- '*.prisma'` through the
+guard and print, for the paths it printed, the provider names only. The
+rest of the line, a trailing comment included, is never printed, and a provider outside Prisma's own names prints as
 `<withheld>`:
 
 ```sh
-git grep -hE '^[[:space:]]*provider[[:space:]]*=' -- '*.prisma' | sed -E 's/^[[:space:]]*provider[[:space:]]*=[[:space:]]*"(postgresql|postgres|mysql|sqlite|sqlserver|mongodb|cockroachdb|prisma-client-js|prisma-client)".*/provider \1/; s/^[[:space:]]*provider[[:space:]]*=.*/provider <withheld>/'
+git grep -hE '^[[:space:]]*provider[[:space:]]*=' -- <files> | sed -E 's/^[[:space:]]*provider[[:space:]]*=[[:space:]]*"(postgresql|postgres|mysql|sqlite|sqlserver|mongodb|cockroachdb|prisma-client-js|prisma-client)".*/provider \1/; s/^[[:space:]]*provider[[:space:]]*=.*/provider <withheld>/'
 ```
 
 ## Environment key names
 
 Open only tracked example files; a name that starts with `secrets` or
 `credentials` stays forbidden. Find them with
-`git ls-files -- '*.env.example' '*.env.sample' '*.env.template' '*.env.dist'`.
-For each one, print key names only, never a value. The command below
-opens the file only when it is a regular file, not a symlink, in a
-directory inside the checkout (a tracked `.env.example` can point at
-`.env`); otherwise it prints one `skipped` line with the name. A value that
+`git ls-files -- '*.env.example' '*.env.sample' '*.env.template' '*.env.dist'`
+and pass the list through the guard. For each path it printed, print key
+names only, never a value, with the command below. A value that
 opens a quote (`"`, `'` or a backtick) and does not close it on the same
 line runs on until the closing quote, and none of its lines is read as a
 key:
 
 ```sh
-f=<file>; d=$(CDPATH= cd -- "$(dirname -- "$f")" 2>/dev/null && pwd -P)
-case "$d/" in "$(pwd -P)/"*) ;; *) d= ;; esac
-if [ -z "$d" ] || [ -L "$f" ] || [ ! -f "$f" ]; then echo "skipped $f: not a regular file in the checkout"
-else awk 'function closes(v, c) { if (c == "\"") gsub(/\\./, "", v); return index(v, c) > 0 }
+awk 'function closes(v, c) { if (c == "\"") gsub(/\\./, "", v); return index(v, c) > 0 }
 { sub(/\r$/, "") }
 q != "" { if (closes($0, q)) q = ""; next }
 match($0, /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/) {
   k = substr($0, 1, RLENGTH - 1); sub(/^[[:space:]]*(export[[:space:]]+)?/, "", k); sub(/[[:space:]]+$/, "", k); print k
   v = substr($0, RLENGTH + 1); sub(/^[[:space:]]+/, "", v); c = substr(v, 1, 1)
-  if ((c == "\"" || c == sprintf("%c", 39) || c == "`") && !closes(substr(v, 2), c)) q = c }' "$f"; fi
+  if ((c == "\"" || c == sprintf("%c", 39) || c == "`") && !closes(substr(v, 2), c)) q = c }' <file>
 ```
 
 - **Secret-looking**: a name that contains `KEY`, `SECRET`, `TOKEN`,
