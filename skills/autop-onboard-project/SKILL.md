@@ -39,7 +39,7 @@ repository's `profile/README.md` is written once, verbatim from
 
 Nothing is written in this step: no file, branch, commit, fetch, checkout or
 install, in any checkout (only a clone of the control repository the person
-accepts). `git status --porcelain` reads the same before and after.
+accepts, placed next to the product checkout, never inside it). `git status --porcelain` reads the same before and after.
 
 1. **`gh` and the product repository.** `gh auth status` must show a login.
    In the checkout, `git remote get-url origin` and
@@ -59,13 +59,15 @@ accepts). `git status --porcelain` reads the same before and after.
    repository is configured as the project's control repo in the Autop console;
    offer to clone that exact repo if absent. No control repo → finish this
    step and stop after the table; the profile is never written to the product
-   repository. Never synthesize a repository name. `$AP`'s owner must be
+   repository. Set `AP_REPO=<owner>/<actual-repo-name>` from the verified
+   `origin`; never synthesize a repository name. `$AP`'s owner must be
    `<org>`; otherwise ask again. When `$AP`'s `origin` is the checkout's own
    `origin`, the person is in the control repository: ask which product
    repository to profile and where its checkout is, and redo item 1 there.
 3. **Existing profile.** Read `profile/<repo>.md` from `$AP`'s default
    branch on GitHub (`gh api -H 'Accept: application/vnd.github.raw'
-   repos/<AP>/contents/profile/<repo>.md`; the local checkout if offline).
+   repos/$AP_REPO/contents/profile/<repo>.md`; the local checkout if
+   offline). Not found → no defaults, continue.
    With `profile: 1` its values are the defaults, and the evidence is shown
    next to them. Any other version, or front matter that does not parse, is
    unreadable: say so and stop after the table; the skill never overwrites

@@ -39,8 +39,8 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
   If that fails, use `git symbolic-ref --short refs/remotes/origin/HEAD`
   and drop the `origin/` prefix.
 - **Long-lived branches**: from `git ls-remote --heads origin`, keep only
-  `main`, `master`, `develop`, `development`, `staging`, `production`,
-  `release/*` and `hotfix/*`. Feature branches are not evidence. Offline,
+  the default branch and `main`, `master`, `develop`, `development`,
+  `staging`, `production`, `release/*` and `hotfix/*`. Feature branches are not evidence. Offline,
   use `git branch -r`.
 - **Release tags**: if `git ls-remote --tags origin 'v*'` prints anything,
   propose `tags: "v*"`. Offline, use `git tag -l 'v*'`.
@@ -50,21 +50,21 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
      default branch is `develop`.
   2. `release/*` exists: `release-branches`, with
      `release_pattern: "release/*"`.
-  3. Only the default branch exists: `trunk`, and
-     `release = develop = default`.
-  4. Anything else, for example `production` next to `main`: `other`, with
-     that branch proposed as `release`.
+  3. `production` (or `master` next to a `main` default) exists: `other`,
+     with that branch proposed as `release` and the default as `develop`.
+  4. Otherwise, the default branch alone, or with only `staging` or
+     `hotfix/*`: `trunk`, and `release = develop = default`.
 
 ## CI and deploy files
 
 List tracked files only, for example with
 `git ls-files -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml`
 and
-`git ls-files -- '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' '*app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
+`git ls-files -- '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
 
 | CI file | `ci.system` |
 |---|---|
-| `.github/workflows/*.yml` | `github-actions` |
+| `.github/workflows/*.yml`, `*.yaml` | `github-actions` |
 | `.gitlab-ci.yml` | `gitlab-ci` |
 | `Jenkinsfile` | `jenkins` |
 | `cloudbuild.yaml`, `cloudbuild.yml` | `cloud-build` |
@@ -90,6 +90,8 @@ Read triggers with
 | `*.tf` | from the resource types: `google_cloud_run_*` → `cloud-run`, `*_instance` → `compute-vm` |
 | `app.yaml`, `fly.toml`, `render.yaml`, `Procfile`, or a `Dockerfile` alone | `other`, named in the target (App Engine, Fly.io, Render, Heroku) |
 
+Read Terraform resource types only, never variables:
+`grep -hoE '^(resource|provider) "[a-z0-9_]+"' <files>`.
 If the only compose file holds just a database for local development, it is
 a data-store hint and not a deploy target. To find the trigger, look for the
 workflow that deploys, using
@@ -106,25 +108,31 @@ The trigger follows that workflow's `on:` section:
 Take names from these sources:
 
 - workflow `environment:` keys;
-- `firebase.json` hosting `target` values and the `.firebaserc` `projects`
-  and `targets` aliases;
+- `firebase.json` hosting `target` values
+  (`grep -nE '"(hosting|target|site)"' firebase.json`) and the
+  `.firebaserc` `projects` and `targets` aliases;
 - compose `profiles:`;
 - the branches `staging` and `production`.
 
 Read compose files with
-`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|build|profiles):' <file>`
-(services, images, the `Dockerfile`s they build, profiles).
+`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|profiles):|^ +build: [^{]*$' <file> | grep -v '@'`
+(services, images, the `Dockerfile`s they build, profiles; never a line
+with user information or inline build arguments).
 Never read their `environment:` blocks. If no source names an environment,
 propose `none`.
 
 ## Services and data stores
 
-Read the package manifests `package.json`, `requirements*.txt`,
-`pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`, `pubspec.yaml`,
-`composer.json` and `*.csproj` without their URL lines, which can carry a
-private index token: `grep -vE '://|index-url|registry' <file>`. Match a
-package by its name, without version or extras: `psycopg[binary]>=3`
-matches `psycopg`, and `launchdarkly-*` or `@supabase/*` match their row.
+Print package names, not whole manifests, because URLs, scripts and
+config blocks can carry a token. For `package.json` use
+`jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and for
+`composer.json` the same over `require` and `require-dev`. For
+`requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
+`pubspec.yaml` and `*.csproj` use
+`grep -viE '://|index-url|registry|password|secret|token *=' <file>`.
+Match a package by its name, without version or extras:
+`psycopg[binary]>=3` matches `psycopg`. A row ending in `*` matches by
+prefix.
 
 | Package | Service (purpose) |
 |---|---|
@@ -139,10 +147,10 @@ matches `psycopg`, and `launchdarkly-*` or `@supabase/*` match their row.
 | `googleapis` | Google APIs |
 | `@slack/*` | Slack (messaging) |
 | `algoliasearch` | Algolia (search) |
-| `launchdarkly` | LaunchDarkly (feature flags) |
+| `launchdarkly-*` | LaunchDarkly (feature flags) |
 | `segment`, `datadog`, `dd-trace`, `newrelic` | Segment (analytics), Datadog, New Relic (monitoring) |
 | `pusher`, `ably` | Pusher, Ably (realtime) |
-| `auth0`, `@clerk/*`, `supabase` | Auth0, Clerk (authentication), Supabase (backend) |
+| `auth0`, `@clerk/*`, `supabase`, `@supabase/*` | Auth0, Clerk (authentication), Supabase (backend) |
 
 | Driver package or compose image | Data store |
 |---|---|
@@ -152,7 +160,7 @@ matches `psycopg`, and `launchdarkly-*` or `@supabase/*` match their row.
 | `redis`, `ioredis`; image `redis` | Redis |
 | `sqlite3` | SQLite |
 | image `elasticsearch`, `rabbitmq` | Elasticsearch, RabbitMQ |
-| `@prisma/*` | the `provider` of `datasource` in `schema.prisma` |
+| `@prisma/*` | `grep -nE '^[[:space:]]*provider[[:space:]]*=' schema.prisma` |
 
 ## Environment key names
 
@@ -187,7 +195,7 @@ these, even when asked during Step 1:
   `.pypirc`, `.netrc`, `id_rsa*`, `id_ed25519*`, `kubeconfig*`,
   `*.tfstate*`, `*.tfvars`, and service-account JSON key files;
 - `~/.config/gh/`, and `~/.autop/` apart from the installed skills (for the
-  runner's `repos_dir`, print that one setting only).
+  runner's `repos_dir`, `grep` that one setting and print nothing else).
 
 Their names may appear in the list of files "not opened". Nothing more
 about them may appear.
