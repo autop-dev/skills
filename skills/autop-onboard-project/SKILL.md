@@ -39,7 +39,8 @@ repository's `profile/README.md` is written once, verbatim from
 
 Nothing is written in this step: no file, branch, commit, fetch, checkout or
 install, in any checkout (only a clone of the control repository the person
-accepts, placed next to the product checkout, never inside it). `git status --porcelain` reads the same before and after.
+accepts, placed next to the product checkout, never inside it).
+`git status --porcelain` reads the same before and after.
 
 1. **`gh` and the product repository.** `gh auth status` must show a login.
    In the checkout, `git remote get-url origin` and
@@ -117,8 +118,9 @@ the control repository, and the next step: file the first story with
   and `.env.dist`, read names only, never a value, and never open `.env`,
   `.env.local`, `.env.production`, `*.pem`, `*.key`, `secrets*`,
   `credentials*` or the other files listed in
-  [references/discovery.md](references/discovery.md). No credential, URL with user information or query string,
-  or internal hostname the person did not volunteer goes into the profile
+  [references/discovery.md](references/discovery.md). No credential, URL
+  with user information or query string, or internal hostname the person
+  did not volunteer goes into the profile
   ([references/profile-format.md](references/profile-format.md), "What must
   never appear").
 - Run in a product repository's checkout, not the control repository; the
