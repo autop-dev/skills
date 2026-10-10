@@ -10,7 +10,8 @@ every GitHub write goes through your `gh` login.
 | Skill | Use it when |
 |---|---|
 | [`autop-add-issue`](skills/autop-add-issue/SKILL.md) | you want to add a task, story or epic to an Autop project. Runs the intake survey, drives spec-kit in the control repo, files one issue per user story with `autop issue add`, on the board as Todo, with native sub-issue and blocked-by links |
-| [`autop-setup-project`](skills/autop-setup-project/SKILL.md) | you are connecting an organisation, repos or a machine to Autop. Checks what exists, prepares `AGENTS.md`, the control repo and labels, hands over the console-side steps |
+| [`autop-setup-project`](skills/autop-setup-project/SKILL.md) | you are connecting an organisation, repos or a machine to Autop. Checks what exists, prepares `AGENTS.md`, the control repo and labels, hands over the console-side steps, then hands over to `autop-onboard-project` for the project profile |
+| [`autop-onboard-project`](skills/autop-onboard-project/SKILL.md) | you want Autop and your team to share how a repository is released: branches, CI/CD, deploy targets, environments, third-party services. Discovers read-only, asks what it cannot infer, writes `profile/<repo>.md` to the control repo through a PR |
 | [`autop-status`](skills/autop-status/SKILL.md) | you want to know what Autop is working on, why an issue is stuck, or what needs a human. Read-only |
 | `speckit-*` | the seven [GitHub spec-kit](https://github.com/github/spec-kit) authoring skills (`specify`, `clarify`, `plan`, `tasks`, `analyze`, `checklist`, `constitution`) that `autop-add-issue` drives, vendored authoring instructions; the control repo still needs spec-kit's `.specify/` scripts and templates |
 
