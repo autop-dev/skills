@@ -15,6 +15,7 @@ class Questions(unittest.TestCase):
 
     def test_questions_come_in_the_story_order(self):
         rows = re.findall(r'^\| (\d+) \| [^|]*\|[^|]*\|[^|]*\| ([^|]*)\|$', DOC, re.M)
+        self.assertEqual(len(rows), len(re.findall(r'^\| \d+ \|', DOC, re.M)), 'a numbered row does not parse')
         self.assertEqual([int(n) for n, _ in rows], list(range(1, len(rows) + 1)))
         keys = [k.strip() for _, k in rows]
         order = ['branches.release', 'branches.develop', 'branches.model', 'ci.system', 'ci.gates',
@@ -31,6 +32,7 @@ class Questions(unittest.TestCase):
             self.assertIn(needle, block)
 
     def test_rendered_section_has_no_query_or_user_info(self):
+        self.assertIsNotNone(BLOCK, 'no ```markdown template in questions.md')
         block = BLOCK[1]
         for key, value in {'<AP_REPO>': 'acme/acme-autopilot', '<AP default branch>': 'main', '<repo>': 'api'}.items():
             block = block.replace(key, value)
@@ -40,12 +42,14 @@ class Questions(unittest.TestCase):
     def test_write_list_names_branches_and_commits(self):
         text = ' '.join((SKILL / 'SKILL.md').read_text().split())
         for needle in ('onboard/profile-<repo>', 'onboard/agents-<repo>', 'docs: profile <repo>',
-                       'docs: link the project profile', 'gh pr create', 'explicit yes', 'autop-add-issue',
+                       'docs: link the project profile', 'gh pr create --repo', 'explicit yes', 'autop-add-issue',
                        'references/questions.md'):
             self.assertIn(needle, text)
 
     def test_report_names_the_next_step_and_never_files_work(self):
-        report = ' '.join((SKILL / 'SKILL.md').read_text().split('## Report\n', 1)[1].split('\n## ', 1)[0].split())
+        text = (SKILL / 'SKILL.md').read_text()
+        self.assertIn('\n## Report\n', text)
+        report = ' '.join(text.split('\n## Report\n', 1)[1].split('\n## ', 1)[0].split())
         for needle in ('pull request links', 'profile/<repo>.md', '`autop-add-issue`', 'Never run `autop issue add`'):
             self.assertIn(needle, report)
 

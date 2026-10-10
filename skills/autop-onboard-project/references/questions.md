@@ -33,8 +33,8 @@ Enter or "yes" keeps the default; a number or a name changes it.
 | # | Question | Default rule | Choices | Key |
 |---|---|---|---|---|
 | — | Default branch | `gh repo view` (stated, never asked) | — | `branches.default` |
-| 1 | Release branch: what production runs | the default branch | the long-lived branches from `git ls-remote --heads` | `branches.release` |
-| 2 | Develop branch: where feature work integrates | `develop` when it exists, else the release branch | the long-lived branches | `branches.develop` |
+| 1 | Release branch: what production runs | the evidence table's proposal (the model rule in [discovery.md](discovery.md) "Branches") | the long-lived branches from `git ls-remote --heads` | `branches.release` |
+| 2 | Develop branch: where feature work integrates | the evidence table's proposal (same rule) | the long-lived branches | `branches.develop` |
 | 3 | Branching model, release-branch glob, tag glob | the model rule in [discovery.md](discovery.md) "Branches"; `"v*"` when `v*` tags exist | 1. trunk 2. git-flow 3. release-branches 4. other | `branches.model`, `branches.release_pattern` (only for release-branches, default `"release/*"`), `branches.tags` (only when releases are tagged) |
 | 4 | CI system and its files | the system whose files were found, else `none` | 1. github-actions 2. gitlab-ci 3. jenkins 4. cloud-build 5. circleci 6. other 7. none | `ci.system`, `ci.config` (the files found; the person may add or drop paths; left out for `none`) |
 | 5 | Checks a pull request must pass | the job and required-check names from the evidence | the names, numbered; "all", numbers, or "none" | `ci.gates` (left out for none) |
@@ -58,10 +58,11 @@ token prefix such as `ghp_`, `github_pat_`, `sk-`, `AKIA`, `AIza`, `xox`,
 `eyJ`; a private key; a long mixed-case or hex string; a password); a value
 from an environment file or a `NAME=value` pair; a URL with user
 information (`@` after `://`), a query string (`?`) or a fragment (`#`). A
-`?` anywhere in a front matter value fails the skills repository's profile
-check (`.github/check.py` applied to a written profile), so a question mark
-in a purpose is rephrased too. Never repeat the refused
-value. Say this one line and ask the same question again:
+`?` anywhere in a front matter value fails the profile check the skills
+repository runs on its example (`.github/check.py`), which every written
+profile must also pass, so a question mark in a purpose is rephrased too.
+Never repeat the refused value. Say this one line and ask the same
+question again:
 
 > That can't go in the profile: no credentials, no environment values, no
 > URL with a user, a query string or a fragment. Give a name, or a public
@@ -87,9 +88,9 @@ deploy line reads "Deploy: nothing is deployed.".
 ```
 
 `AGENTS.md` absent → create it with this section only. A section with this
-exact heading → replace it in place, from the heading to the next `# ` or
-`## ` heading outside a code fence, or the end of the file; nothing else in
-the file changes.
+exact heading outside a code fence → replace it in place, from the heading
+to the next `# ` or `## ` heading outside a code fence, or the end of the
+file; a second such section is removed; nothing else in the file changes.
 Otherwise append it at the end, after one blank line. The link resolves
 once the control repository's pull request merges.
 
@@ -99,17 +100,22 @@ once the control repository's pull request merges.
   [discovery.md](discovery.md) "Existing profile"; a value it prints as
   `<withheld>` is never a default and is never written back: ask afresh.
 - **Rewritten:** the front matter keys this contract names and the four
-  factual prose sections, from the new answers.
+  factual prose sections, from the new answers. Unknown keys inside a
+  `deploy`, `environments`, `services` or `data_stores` entry stay with the
+  entry of the same `name`.
 - **Kept verbatim:** the `## Notes` text (a new answer to question 10 is
   appended below it, replacing a lone "Nothing recorded."); front matter
   keys the contract does not name, after the known keys of their mapping.
-  Copy both from the stored text held in the variable Step 1 filled, with a
-  script, never by printing the file. An unknown key the filter printed as
-  `<withheld>` is dropped, not copied, and named in the write list; a Notes
-  line the filter's credential test would withhold is shown as
-  `<withheld>` in Step 3 and the person is asked to remove it.
-- **`updated`** is set to today. When nothing else would change, say so
-  and ask whether to write at all.
+  Step 3 copies both with one script that re-reads the stored file with
+  the Step 1 command (a shell variable does not outlive its call) and
+  writes the new file without printing it. The profile shown in Step 3
+  prints the Notes as "(kept verbatim, N lines)" and unknown keys as the
+  filter prints them; an unknown key the filter printed as `<withheld>` is
+  dropped, not copied, and named in the write list.
+- **`updated`** is set to today. A repository whose file would not change
+  (the same `AGENTS.md` section; a profile identical but for `updated`) is
+  left out of the write list and said so; nothing changes → nothing to
+  write.
 - A stored profile whose version is not `1` or whose front matter does not
   parse is never overwritten (Step 1 stops).
 - An existing `## Branches and delivery` section in `AGENTS.md` is replaced
@@ -118,4 +124,7 @@ once the control repository's pull request merges.
   exists on `origin` (an earlier, unmerged run) → ask: update that branch
   and its open pull request (`git worktree add -B <branch> <tmp>
   origin/<branch>`, apply the new files there, commit, push; no new pull
-  request), or use a new name with a `-2` suffix.
+  request), or use a new name with a `-2` suffix. Check with
+  `git ls-remote --heads origin <branch>` before every write, first run
+  included. A worktree left by an interrupted run is removed first
+  (`git worktree prune`; `git worktree remove --force <tmp>`).

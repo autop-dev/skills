@@ -121,11 +121,12 @@ one-line rule from questions.md, never repeat the value, ask again.
    and delivery`, commit `docs: link the project profile`, a pull request.
    Write nothing before an explicit yes.
 3. **Write** in a temporary worktree per repository (`git fetch origin`,
-   `git worktree add -B <branch> <tmp> origin/<default>`), so no checkout's
-   working tree changes: commit, `git push -u origin <branch>`, `gh pr
-   create --base <default> --head <branch>` under the person's login. A
-   direct push is `git push origin HEAD:<default>`; rejected → offer the
-   branch and pull request. `gh pr create` refused → print
+   `git worktree add -B <branch> <tmp> origin/<default>`; a branch already
+   on `origin` → questions.md "Re-runs"), so no checkout's working tree
+   changes: commit, `git push -u origin <branch>`, `gh pr create --repo
+   <owner>/<name> --base <default> --head <branch>` under the person's
+   login. A direct push is `git push origin HEAD:<default>`; rejected →
+   offer the branch and pull request. `gh pr create` refused → print
    `https://github.com/<owner>/<name>/compare/<default>...<branch>`. Remove
    the worktrees.
 
@@ -140,8 +141,7 @@ first story with `autop-add-issue`. Never run `autop issue add`.
 - Never the console, App installations, enrollment tokens or provider
   logins: those are the person's actions in https://app.autop.dev and on
   GitHub.
-- Every write is listed and confirmed once before it happens; nothing is
-  written before an explicit yes.
+- Every write is listed and confirmed once; nothing before an explicit yes.
 - Never run `autop issue add`; filing work is `autop-add-issue`.
 - Nothing from an environment file beyond key names reaches the profile or
   the transcript: open only `.env.example`, `.env.sample`, `.env.template`
