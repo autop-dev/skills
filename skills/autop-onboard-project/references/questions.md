@@ -137,10 +137,16 @@ once the control repository's pull request merges.
   the same raw file (`p` from the same first line, in the same call). It
   prints one `keep <path>` or `drop <path>` line per unknown key, never a
   value. `drop` means the key or a value under it fails the filter's
-  credential test (the same `risky`): it is left out and named in the
-  write list. A key the filter withholds only for its name (`monkey_tests`
-  holds `KEY`) is `keep`: copied verbatim, still shown as `<withheld>`, and
-  named in the write list as "kept, value not shown".
+  credential test (the same `risky`), or a non-empty value sits under a
+  key with a credential word in its name (a word, split at `_`, `-`, `.`
+  and case changes, such as `password`, `passwd`, `pwd`, `secret`,
+  `token`, `key`, `dsn`, `credentials`, `auth`, alone or after `api`,
+  `access`, `secret`, `auth`, `client`, `signing` or `private`:
+  `password`, `DB_PASSWORD`, `apiKey`, `deploy_token`): it is left out and
+  named in the write list. A key the filter withholds only for a substring
+  of its name (`monkey_tests` holds `KEY`) is `keep`: copied verbatim,
+  still shown as `<withheld>`, and named in the write list as "kept, value
+  not shown".
 
 ```sh
 printf '%s\n' "$p" | python3 -E -c '
@@ -151,18 +157,21 @@ d = yaml.safe_load("\n".join(t[1:t.index("---", 1)]))
 KNOWN = {"": "profile repository updated branches ci deploy environments services data_stores", "branches": "default release develop model release_pattern tags",
     "ci": "system config gates", "deploy": "name kind config trigger", "environments": "name branch url", "services": "name purpose evidence",
     "data_stores": "name purpose managed_by"}
+CRED = re.compile("(api|access|secret|auth|client|signing|private)?(keys?|secrets?|tokens?|pass(words?|wd|phrase)?|pwd|dsn|credentials?|auth)")
+def cred(k):
+    return any(CRED.fullmatch(w.lower()) for w in re.findall("[A-Z]?[a-z0-9]+|[A-Z]+(?![a-z])", str(k)))
 def risky(s):
     return bool(re.search(r"://[^/\s]*@|://\S*#|\?|-----BEGIN|PRIVATE KEY|[A-Za-z_]\w*=\S|(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)", s)) or any(
         len(r) >= 24 and re.search("[0-9]", r) and re.search("[a-z]", r) and re.search("[A-Z]", r) or len(r) >= 32 and re.fullmatch("[0-9A-Fa-f]+", r)
         for r in re.findall(r"[A-Za-z0-9+/=_-]+", s))
 def bad(v, up=()):
     if id(v) in up: return False
-    if isinstance(v, dict): return any(bad(k) or bad(x, up + (id(v),)) for k, x in v.items())
+    if isinstance(v, dict): return any(bad(k) or cred(k) and x not in (None, "", [], {}) or bad(x, up + (id(v),)) for k, x in v.items())
     if isinstance(v, list): return any(bad(x, up + (id(v),)) for x in v)
     return v is not None and risky(str(v))
 def unknown(path, v, known):
     for k, x in v.items() if isinstance(v, dict) else ():
-        if str(k) not in known.split(): print(("drop " if bad(k) or bad(x) else "keep ") + path + ("<withheld>" if risky(str(k)) else str(k)))
+        if str(k) not in known.split(): print(("drop " if bad({k: x}) else "keep ") + path + ("<withheld>" if risky(str(k)) else str(k)))
 unknown("", d, KNOWN[""])
 for key in ("branches", "ci"): unknown(key + ".", d.get(key), KNOWN[key])
 for key in ("deploy", "environments", "services", "data_stores"):
@@ -195,5 +204,14 @@ for key in ("deploy", "environments", "services", "data_stores"):
   when it exists, else `origin/<default>`) → show
   `git log --oneline <base>..<branch>` and ask, also before the interview,
   before `-B` resets it.
-- A worktree left by an interrupted run: `git worktree list` names its
-  path; `git worktree remove --force <path>`, then `git worktree prune`.
+- A worktree left by an interrupted run, checked before the branches
+  above: `git worktree list --porcelain` names it. Only a worktree on
+  `onboard/profile-<repo>`, `onboard/agents-<repo>` or one of their `-2`,
+  `-3`, … names is this skill's; any other is never touched. One with
+  nothing in `git -C <path> status --porcelain` → `git worktree remove
+  <path>` (never `--force`), then `git worktree prune`. One with
+  uncommitted or untracked files → show its path and
+  `git -C <path> status --short` and ask, before the interview, whether
+  to discard them. It is kept unless the answer is an explicit yes; only
+  then `git worktree remove --force <path>`. A kept worktree's branch
+  counts as taken: the run uses the next free name (above).

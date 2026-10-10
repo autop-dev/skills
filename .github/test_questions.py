@@ -54,24 +54,41 @@ class Questions(unittest.TestCase):
             self.assertIn(needle, FLAT)
 
     def test_unknown_keys_are_kept_unless_their_content_is_credential_looking(self):
-        """FR-019: a key withheld only for its name is copied; a credential-looking key or value is dropped."""
+        """FR-019, SC-003: a key withheld only for a substring of its name is copied; a credential-looking
+        key or value, or any value under a credential word such as `password`, is dropped."""
         self.assertEqual(risky(CARRY), risky(FILTER), 'the check must use the filter\'s credential test')
         token = 'ghp_' + 'a1B2' * 9
         profile = '\n'.join([
             '---', 'profile: 1', 'repository: acme/api', 'updated: 2026-01-01',
             'branches: {default: main, release: main, develop: main, model: trunk, freeze: friday}',
-            'ci: {system: none}', 'deploy:', '  - {name: web, kind: other, trigger: manual, region: eu, hook: "https://u:p@h"}',
+            'ci: {system: none}', 'deploy:', '  - {name: web, kind: other, trigger: manual, region: eu, hook: "https://u:p@h", password: hunter2}',
             'environments: []', 'services: []', 'data_stores: []',
             'monkey_tests: [checkout, search]', 'owner_team: payments', 'deploy_token: ' + token,
-            'api_key: ' + 'Ab1' * 10, token + ': x', 'note: "BUILD=1"', '---', '', '## Notes', '', 'Nothing recorded.', ''])
+            'api_key: ' + 'Ab1' * 10, token + ': x', 'note: "BUILD=1"',
+            'password: hunter2', 'DB_PASSWORD: hunter2', 'apiKey: hunter2', 'db: {host: db1, passwd: hunter2}',
+            'author: ann', 'keyboard: us', 'passenger_count: 3', 'secret: ""',
+            '---', '', '## Notes', '', 'Nothing recorded.', ''])
         result = subprocess.run(['bash', '-c', CARRY], capture_output=True, text=True, timeout=60,
                                 env={'p': profile, 'PATH': os.environ['PATH']})
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), [
             'keep monkey_tests', 'keep owner_team', 'drop deploy_token', 'drop api_key', 'drop <withheld>', 'drop note',
-            'keep branches.freeze', 'keep deploy[0].region', 'drop deploy[0].hook'])
+            'drop password', 'drop DB_PASSWORD', 'drop apiKey', 'drop db',
+            'keep author', 'keep keyboard', 'keep passenger_count', 'keep secret',
+            'keep branches.freeze', 'keep deploy[0].region', 'drop deploy[0].hook', 'drop deploy[0].password'])
         self.assertNotIn(token, result.stdout + result.stderr)
+        self.assertNotIn('hunter2', result.stdout + result.stderr)
         self.assertIn('`monkey_tests` holds `KEY`) is `keep`', FLAT)
+
+    def test_a_leftover_worktree_is_removed_only_when_clean_or_approved(self):
+        """FR-016: an interrupted run's dirty worktree is kept unless the person explicitly says to discard it."""
+        rerun = FLAT.split('A worktree left by an interrupted run', 1)[1]
+        self.assertNotRegex(FLAT.split('A worktree left by an interrupted run', 1)[0], r'worktree remove')
+        for needle in ('any other is never touched', '`git -C <path> status --porcelain`', '(never `--force`)',
+                       '`git -C <path> status --short` and ask, before the interview',
+                       'It is kept unless the answer is an explicit yes; only then `git worktree remove --force <path>`'):
+            self.assertIn(needle, rerun)
+        self.assertLess(rerun.index('explicit yes'), rerun.index('remove --force'))
 
     def test_an_unchanged_profile_is_skipped_only_with_the_same_updated(self):
         """FR-019: `updated` counts in the comparison, so a later revisit refreshes it."""
