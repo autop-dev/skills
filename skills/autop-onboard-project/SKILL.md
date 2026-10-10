@@ -43,8 +43,9 @@ accepts, placed next to the product checkout, never inside it).
 `git status --porcelain` reads the same before and after.
 
 1. **`gh` and the product repository.** `gh auth status` must show a login.
-   In the checkout, take `<owner>/<name>` from `git remote get-url origin`
-   (SSH and HTTPS remotes are both valid); `gh repo view <owner>/<name>
+   In the checkout, take `<owner>/<name>` from
+   `git remote get-url origin | sed -E 's#//[^/@]*@#//#'` (user info, which
+   can hold a token, is stripped; SSH and HTTPS remotes are both valid); `gh repo view <owner>/<name>
    --json nameWithOwner,isInOrganization,isFork,defaultBranchRef` gives
    `REPO=<org>/<repo>` and the default branch. A fork → ask for the
    organisation repository's checkout. Not a git checkout → ask for
@@ -72,7 +73,7 @@ accepts, placed next to the product checkout, never inside it).
 3. **Existing profile.** Read `profile/<repo>.md` from `$AP`'s default
    branch on GitHub (`gh api -H 'Accept: application/vnd.github.raw'
    repos/$AP_REPO/contents/profile/<repo>.md`; offline,
-   `git -C "$AP" show origin/<default>:profile/<repo>.md`). Not found → no
+   `git -C "$AP" show origin/HEAD:profile/<repo>.md`). Not found → no
    defaults, continue. With `profile: 1` its values are the defaults, and
    the evidence is shown next to them. Any other version, or front matter
    that does not parse, is unreadable: say so and stop after the table; the

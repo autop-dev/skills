@@ -39,7 +39,7 @@ manifest; it prints names only.
 
 - **Default branch**: `defaultBranchRef` from Step 1 item 1. If that
   failed, use `git symbolic-ref --short refs/remotes/origin/HEAD`
-  and drop the `origin/` prefix.
+  and drop the `origin/` prefix; if neither works, ask.
 - **Long-lived branches**: from `git ls-remote --heads origin`, keep only
   the default branch and `main`, `master`, `develop`, `development`,
   `staging`, `production`, `release/*` and `hotfix/*`. Feature branches are not evidence. Offline,
@@ -63,7 +63,7 @@ manifest; it prints names only.
 List tracked files only, for example with
 `git ls-files -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml azure-pipelines.yml bitbucket-pipelines.yml .travis.yml '.buildkite/*'`
 and
-`git ls-files -- '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
+`git ls-files -- ':(exclude).github/*' ':(exclude)*.md' '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
 
 | CI file | `ci.system` |
 |---|---|
@@ -128,7 +128,7 @@ Take names from these sources:
 - the branches `staging` and `production`.
 
 Read compose services, images and the `Dockerfile`s they build with
-`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#'`
+`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'`
 (a registry host is replaced), and profiles with
 `awk '/^ +profiles:/{p=1; print NR": "$0; next} p && /^ +- [A-Za-z0-9_-]+ *$/{print NR": "$0; next} {p=0}' <file>`.
 Never read `environment:`, `command:`, `secrets:` or `args:` blocks. If no source names an environment,
@@ -141,10 +141,12 @@ config blocks can carry a token or an internal address. For `package.json`
 use `jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and
 for `composer.json` use `jq -r '(.require // {}), (.["require-dev"] // {}) | keys[]'`. For
 `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
-`pubspec.yaml` and `*.csproj`, print only the table names they contain:
+`pubspec.yaml` and `*.csproj` (list them with
+`git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`),
+print only the table names they contain:
 
 ```sh
-grep -ohiwE 'stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?' <files> | sort -u
+grep -ohiE '(^|[^a-z])(stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?)([^a-z]|$)' <files> | sort -u
 ```
 
 Match a package by its name, without version or extras:
@@ -182,7 +184,8 @@ prefix, and Go module paths or .NET packages that contain a row's name
 
 ## Environment key names
 
-Open only tracked example files. Find them with
+Open only tracked example files; a name that starts with `secrets` or
+`credentials` stays forbidden. Find them with
 `git ls-files -- '*.env.example' '*.env.sample' '*.env.template' '*.env.dist'`.
 For each one, print key names only, never a value:
 
