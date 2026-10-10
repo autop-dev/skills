@@ -1,4 +1,4 @@
-"""Validate skill metadata and reject recognizable credential formats."""
+"""Validate skill metadata and the profile example, and reject recognizable credential formats."""
 from pathlib import Path
 import re
 import yaml
@@ -23,10 +23,39 @@ for path in skills:
         assert isinstance(meta.get('description'), str) and meta['description'].strip()
     except (AssertionError, yaml.YAMLError):
         errors.append(f'{path.relative_to(root)}: invalid name/description frontmatter')
+PROFILE_KEYS = ('repository', 'updated', 'branches.default', 'branches.release', 'branches.develop',
+                'branches.model', 'ci.system', 'deploy', 'environments', 'services', 'data_stores')
+example = root / 'skills/autop-onboard-project/references/example-profile.md'
+rel = example.relative_to(root)
+match = re.match(r'\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)', example.read_text() if example.is_file() else '', re.S)
+try:
+    profile = yaml.safe_load(match[1]) if match else None
+except yaml.YAMLError:
+    profile = None
+if not isinstance(profile, dict):
+    errors.append(f'{rel}: invalid profile front matter')
+    profile = {}
+elif type(profile.get('profile')) is not int or profile['profile'] != 1:
+    errors.append(f'{rel}: profile version must be 1')
+for key in PROFILE_KEYS:
+    node = profile
+    for part in key.split('.'):
+        node = node.get(part) if isinstance(node, dict) else None
+    if node is None:
+        errors.append(f'{rel}: missing {key}')
+values = [profile]
+while values:
+    value = values.pop()
+    if isinstance(value, dict):
+        values.extend(value.values())
+    elif isinstance(value, list):
+        values.extend(value)
+    elif isinstance(value, str) and (re.search(r'://[^/\s]*@', value) or '?' in value):
+        errors.append(f'{rel}: URL with user info or query string')
 for path in files:
     content = path.read_bytes().decode('utf-8', errors='replace')
     if any(re.search(pattern, content) for pattern in patterns):
         errors.append(f'{path.relative_to(root)}: token-looking content (value withheld)')
 if errors:
     raise SystemExit('\n'.join(errors))
-print(f'Checked {len(skills)} skills and {len(files)} files: metadata and token scan passed')
+print(f'Checked {len(skills)} skills, {rel} and {len(files)} files: metadata, profile example and token scan passed')
