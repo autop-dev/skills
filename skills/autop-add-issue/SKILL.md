@@ -72,8 +72,9 @@ creating issues and integration refs in Step 5.
    the "Source of truth:" line in `$AP/AGENTS.md`, else ask.
 6. **Profiles.** For every in-scope repo read `$AP/profile/<repo>.md` when
    present (written by `autop-onboard-project`; `<repo>` is the name without
-   the organisation) and note `branches.default`, `branches.develop` and
-   `branches.release` from its front matter. A repo without one is fine.
+   the organisation) and note only `branches.default`, `branches.develop` and
+   `branches.release` from its front matter. A repo without one is fine; a
+   `profile:` other than `1` or unreadable front matter counts as absent, say so.
 
 Tell the user briefly what you found (board, repos, source of truth).
 
@@ -266,7 +267,9 @@ reason), priority, board, epic/sub-issue structure, blockers, per-story code
 estimates and verification runtime assumptions — and get an
 explicit yes. Issue creation is outward-facing. For an epic, name for each
 repo a story changes the branch its integration branch is cut from:
-"integration branch cut from `<default>`", the default branch Step 5 resolves.
+"integration branch cut from `<default>`", the GitHub default branch Step 5
+cuts from, read with
+`gh repo view <ORG>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`.
 When that repo's profile records a `develop` that differs from it, add one
 sentence: "the profile records `<develop>` as the develop branch; Autop
 integrates and releases on the default branch today, the profile's branch is

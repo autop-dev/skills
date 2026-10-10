@@ -105,7 +105,8 @@ Print the remaining person-only steps in order, each with its link:
    sees those credentials.
 5. In each product repository's checkout run `autop-onboard-project` to
    record the project profile (branches, CI/CD, deploy targets, environments
-   and services) as `profile/<repo>.md` in the control repo.
+   and services) as `profile/<repo>.md` in the control repo; merge the pull
+   request it opens.
 6. Smoke test: file one small, reversible story with `autop-add-issue` (a
    documentation change is ideal) and watch its job, PR, review and board
    move in the console.
