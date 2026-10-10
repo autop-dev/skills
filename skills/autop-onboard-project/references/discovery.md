@@ -75,8 +75,11 @@ and
 If files from several CI systems are present, list them all and ask which
 one gates pull requests. Gates are the job names under `jobs:` of the
 workflows triggered by `pull_request` (not deploy, release or scheduled
-jobs). For another CI system, list its job or stage names and propose the
-trigger as a question. Read GitHub Actions jobs and environments with
+jobs); `gh api repos/$REPO/rules/branches/<default>` shows required checks
+when the login can read them. For another CI system, list its job or stage
+names and ask for the gates and trigger. The commands below assume
+two-space YAML indentation; adjust the counts for other files. Read GitHub
+Actions jobs and environments with
 `sed -n '/^jobs:/,$p' <file> | grep -nE '^ {2}[A-Za-z0-9_-]+:[[:space:]]*$|^ {4}(name|environment):|^ {6}name:'`.
 Read triggers with
 `sed -n "/^[\"']\{0,1\}on[\"']\{0,1\}:/,/^[a-z]/p" <file>`.
@@ -109,32 +112,39 @@ The trigger follows that workflow's `on:` section:
 
 Take names from these sources:
 
-- workflow `environment:` keys;
+- workflow `environment:` keys, and
+  `gh api repos/$REPO/environments --jq '.environments[].name'` when the
+  login can read them;
 - `firebase.json` hosting `target` values
   (`grep -nE '"(hosting|target|site)"' firebase.json`) and the
   `.firebaserc` `projects` and `targets` aliases;
 - compose `profiles:`;
 - the branches `staging` and `production`.
 
-Read compose files with
-`grep -nE -A3 '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|profiles):|^ +build: [^{]*$' <file> | grep -E '^[0-9]+:|^[0-9]+-[[:space:]]+- [A-Za-z0-9_-]+$' | grep -v '://[^/ ]*@'`
-(services, images, the `Dockerfile`s they build, profiles in either form;
-never a line with user information or inline build arguments).
-Never read their `environment:` blocks. If no source names an environment,
+Read compose services, images and the `Dockerfile`s they build with
+`grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#(image: *)[^/ ]+\.[^/ ]+/#\1<registry>/#'`
+(a registry host is replaced), and profiles with
+`awk '/^ +profiles:/{p=1; print NR": "$0; next} p && /^ +- [A-Za-z0-9_-]+ *$/{print NR": "$0; next} {p=0}' <file>`.
+Never read `environment:`, `command:`, `secrets:` or `args:` blocks. If no source names an environment,
 propose `none`.
 
 ## Services and data stores
 
-Print package names, not whole manifests, because URLs, scripts, authors
-and config blocks can carry a token or an internal address. For `package.json` use
-`jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and for
-`composer.json` the same over `require` and `require-dev`. For
+Print package names, never whole manifests: URLs, scripts, authors and
+config blocks can carry a token or an internal address. For `package.json`
+use `jq -r '(.dependencies // {}), (.devDependencies // {}) | keys[]'`, and
+for `composer.json` the same over `require` and `require-dev`. For
 `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
-`pubspec.yaml` and `*.csproj` use
-`grep -viE '://|index-url|registry|@|(key|token|secret|passw|auth)[A-Za-z_-]* *[=:]' <file>`.
+`pubspec.yaml` and `*.csproj`, print only the table names they contain:
+
+```sh
+grep -ohiE 'stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algolia|launchdarkly|segment|datadog|dd-trace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?' <files> | sort -u
+```
+
 Match a package by its name, without version or extras:
 `psycopg[binary]>=3` matches `psycopg`. A row ending in `*` matches by
-prefix.
+prefix, and Go module paths or .NET packages that contain a row's name
+(`github.com/stripe/stripe-go`, `Stripe.net`) match it.
 
 | Package | Service (purpose) |
 |---|---|
@@ -156,13 +166,13 @@ prefix.
 
 | Driver package or compose image | Data store |
 |---|---|
-| `pg`, `psycopg*`, `asyncpg`; image `postgres` | PostgreSQL |
+| `pg`, `psycopg*`, `asyncpg`, `pgx`, `Npgsql`; image `postgres` | PostgreSQL |
 | `mysql2`, `mysqlclient`, `pymysql`, `mysql-connector-*`; image `mysql`, `mariadb` | MySQL, MariaDB |
 | `mongoose`, `pymongo`, `motor`; image `mongo` | MongoDB |
 | `redis`, `ioredis`; image `redis` | Redis |
 | `sqlite3` | SQLite |
 | image `elasticsearch`, `rabbitmq` | Elasticsearch, RabbitMQ |
-| `@prisma/*` | `grep -nE '^[[:space:]]*provider[[:space:]]*=' $(git ls-files -- '*schema.prisma')` |
+| `@prisma/*` | `git grep -nE '^[[:space:]]*provider[[:space:]]*=' -- '*.prisma'` |
 
 ## Environment key names
 

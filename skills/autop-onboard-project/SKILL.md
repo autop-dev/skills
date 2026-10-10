@@ -43,10 +43,10 @@ accepts, placed next to the product checkout, never inside it).
 `git status --porcelain` reads the same before and after.
 
 1. **`gh` and the product repository.** `gh auth status` must show a login.
-   In the checkout, `git remote get-url origin` and
-   `gh repo view --json nameWithOwner,isInOrganization,defaultBranchRef`
-   give `REPO=<org>/<repo>` and the default branch. Not a git checkout →
-   ask for the product repository's path. `isInOrganization` false → say the
+   In the checkout, `gh repo view "$(git remote get-url origin)" --json
+   nameWithOwner,isInOrganization,defaultBranchRef` gives
+   `REPO=<org>/<repo>` and the default branch. Not a git checkout → ask for
+   the product repository's path. `isInOrganization` false → say the
    profile belongs to an organisation project, point at the setup skill's
    [personal-to-organisation.md](../autop-setup-project/references/personal-to-organisation.md),
    and stop.
@@ -62,9 +62,10 @@ accepts, placed next to the product checkout, never inside it).
    step and stop after the table; the profile is never written to the product
    repository. Set `AP_REPO=<owner>/<actual-repo-name>` from the verified
    `origin`; never synthesize a repository name. `$AP`'s owner must be
-   `<org>`; otherwise ask again. When `$AP`'s `origin` is the checkout's own
-   `origin`, the person is in the control repository: ask which product
-   repository to profile and where its checkout is, and redo item 1 there.
+   `<org>`; otherwise ask again. When `AP_REPO` equals `REPO` (compare
+   owner/name, not remote URLs), the person is in the control repository:
+   ask which product repository to profile and where its checkout is, and
+   redo item 1 there.
 3. **Existing profile.** Read `profile/<repo>.md` from `$AP`'s default
    branch on GitHub (`gh api -H 'Accept: application/vnd.github.raw'
    repos/$AP_REPO/contents/profile/<repo>.md`; the local checkout if
