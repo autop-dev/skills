@@ -38,10 +38,14 @@ def on_file(command, text, name='file.yml'):
         return run(command.replace('<file>', shlex.quote(str(path))).replace(' firebase.json', ' ' + shlex.quote(str(path))))
 
 
-JOBS = fenced("awk 'function clean(v)", 'jobs:')
-TRIGGERS = fenced("awk 'function clean(v)", 'function each(')
+JOBS = fenced("awk 'function clean(v,", 'jobs:')
+TRIGGERS = fenced("awk 'function clean(v,", 'function each(')
 COMPOSE = fenced("grep -nE '^ {2}")
+COMPOSE_PROFILES = fenced("awk 'function out(v)")
 PROFILE = fenced('p=$(gh api ')
+PROFILE_OFFLINE = inline('p=$(git -C "$AP" show')
+CONTROL = fenced('want=$(')
+MERGE = fenced("printf '%s\\n' \"$defaults\"")
 FIREBASE = inline("jq -r 'def safe:")
 ENV_FILES = inline("git ls-files -- '*.env.example'")
 ENV_NAMES = fenced("sed -n 's/^[[:space:]]*")
@@ -85,6 +89,12 @@ jobs:
     environment: ${{ inputs.target }}
   odd:
     environment: "prod@odd-name-secret"
+  release:
+    name: Deploy https://user:display-name-secret@example.com
+  lint:
+    name: Lint  # TOKEN=comment-secret
+  token:
+    name: Push Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9
 """
 
 FOUR_SPACE = """\
@@ -106,8 +116,11 @@ class WorkflowTest(unittest.TestCase):
         lines = [line.split(': ', 1)[1] for line in result.stdout.splitlines()]
         self.assertEqual(lines, ['job test', 'name Test', 'job quoted', 'environment staging', 'job inline',
                                  'environment production', 'job block', 'environment preview', 'job expression',
-                                 'environment <expression>', 'job odd', 'environment <withheld>'])
+                                 'environment <expression>', 'job odd', 'environment <withheld>',
+                                 'job release', 'name <withheld>', 'job lint', 'name Lint', 'job token',
+                                 'name <withheld>'])
         self.assertNotIn('secret', result.stdout)
+        self.assertNotIn('Ab1Cd2', result.stdout)
 
     def test_any_indentation(self):
         result = on_file(JOBS, FOUR_SPACE)
@@ -143,11 +156,35 @@ services:
     image: postgres:17@sha256:abc
     environment:
       POSTGRES_PASSWORD: compose-env-secret
+  cache: # TOKEN=service-comment-secret
+    image: redis:7 # PASSWORD=image-comment-secret
+  odd:
+    image: postgres:17 PASSWORD=image-value-secret
+    build: ./odd # TOKEN=build-comment-secret
 """)
         self.assertEqual(result.stdout.splitlines(), [
             '2:  app:', '3:    build: <withheld>', '4:    image: <registry>/org/app:1', '5:  worker:',
             '6:    build: ./worker', '7:  remote:', '8:    build: <withheld>', '9:  db:',
-            '10:    image: postgres:17@sha256:abc'])
+            '10:    image: postgres:17@sha256:abc', '13:  cache:', '14:    image: redis:7', '15:  odd:',
+            '16:    image: <withheld>', '17:    build: ./odd'])
+        self.assertNotIn('secret', result.stdout)
+
+    def test_compose_profile_names_only(self):
+        result = on_file(COMPOSE_PROFILES, """\
+services:
+  app:
+    profiles: [prod, "dev"] # TOKEN=inline-profile-secret
+    image: app
+  backup:
+    profiles:
+      - backup # PASSWORD=list-profile-secret
+      - 'odd name!'
+    environment:
+      - KEY=after-profiles-secret
+""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), ['3: profile prod', '3: profile dev', '7: profile backup',
+                                                      '8: profile <withheld>'])
 
     @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
     def test_firebase_hosting_names_only(self):
@@ -160,43 +197,159 @@ services:
                          ['hosting target=prod site=acme-prod', 'hosting target=<withheld> site='])
 
 
+EXAMPLE_VALUES = [
+    'profile: 1', 'repository: acme/api', 'updated: 2026-10-10', 'branches.default: main', 'branches.release: main',
+    'branches.develop: main', 'branches.model: trunk', 'branches.tags: v*', 'ci.system: github-actions',
+    'ci.config[0]: .github/workflows/ci.yml', 'ci.config[1]: .github/workflows/deploy.yml', 'ci.gates[0]: lint',
+    'ci.gates[1]: test', 'deploy[0].name: api', 'deploy[0].kind: cloud-run', 'deploy[0].config[0]: Dockerfile',
+    'deploy[0].config[1]: .github/workflows/deploy.yml', 'deploy[0].trigger: push-to-release',
+    'environments[0].name: production', 'environments[0].branch: main',
+    'environments[0].url: https://api.example.com', 'environments[1].name: staging', 'environments[1].branch: main',
+    'environments[1].url: https://staging.api.example.com', 'services[0].name: Stripe',
+    'services[0].purpose: payments and subscription billing', 'services[0].evidence[0]: stripe (package)',
+    'services[0].evidence[1]: STRIPE_SECRET_KEY (environment key name)', 'services[1].name: Sentry',
+    'services[1].purpose: error reporting', 'services[1].evidence[0]: sentry-sdk (package)',
+    'services[1].evidence[1]: SENTRY_DSN (environment key name)', 'data_stores[0].name: PostgreSQL',
+    'data_stores[0].purpose: primary store', 'data_stores[0].managed_by: Cloud SQL']
+
+
 class ProfileTest(unittest.TestCase):
     def read(self, text):
+        """The filter's output for a fetched profile, `gh api` replaced by a file, run in a checkout that plants
+        modules named like the ones the filter imports."""
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'profile.md'
             path.write_text(text)
+            for module in ('yaml', 're'):
+                (Path(tmp) / f'{module}.py').write_text('print("planted module ran"); raise SystemExit(0)\n')
             command = re.sub(r'^p=\$\(gh api [^\n]*\) &&', f'p=$(cat {shlex.quote(str(path))}) &&', PROFILE)
             self.assertNotEqual(command, PROFILE)
-            return run(command)
+            result = run(command, cwd=tmp)
+            self.assertNotIn('planted', result.stdout)
+            return result
 
     def test_unreadable_profiles_print_nothing_from_the_file(self):
         for text, reason in (('password: malformed-profile-secret\n', 'no front matter'),
                              ('---\nprofile: 2\ntoken: newer-profile-secret\n---\n', 'not profile: 1'),
-                             ('---\nprofile: 1\nkey: unclosed-profile-secret\n', 'front matter not closed')):
+                             ('---\nprofile: 1\nkey: unclosed-profile-secret\n', 'front matter not closed'),
+                             ('---\nprofile: 1\nbranches: [\nkey: bracket-profile-secret\n---\n',
+                              'front matter does not parse'),
+                             ('---\nprofile: 1\n  token: indent-profile-secret\n---\n', 'front matter does not parse'),
+                             ('---\n- profile: 1\n- list-profile-secret\n---\n', 'not profile: 1'),
+                             ('---\nprofile: true\ntoken: bool-profile-secret\n---\n', 'not profile: 1')):
             with self.subTest(reason=reason):
                 result = self.read(text)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(result.stdout, f'unreadable: {reason}\n')
 
-    def test_example_profile_front_matter_prints_unchanged(self):
-        example = (SKILL / 'references/example-profile.md').read_text()
-        result = self.read(example)
+    def test_example_profile_prints_every_value(self):
+        result = self.read((SKILL / 'references/example-profile.md').read_text())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, example.split('\n---\n', 1)[0][4:] + '\n')
+        self.assertEqual(result.stdout.splitlines(), EXAMPLE_VALUES)
 
     def test_credentials_in_a_valid_profile_are_withheld(self):
         example = (SKILL / 'references/example-profile.md').read_text()
         head, sep, body = example.partition('\n---\n')
-        extra = ('notes_url: https://user:url-profile-secret@example.com/x\napi_token: plain-profile-secret\n'
-                 'extra:\n  - STRIPE_SECRET_KEY=assignment-profile-secret\n  - Bearer Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9')
+        extra = ('notes_url: https://user:url-profile-secret@example.com/x # comment-profile-secret\n'
+                 'api_token: plain-profile-secret\n'
+                 'extra:\n  - STRIPE_SECRET_KEY=assignment-profile-secret\n  - Bearer Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9\n'
+                 'api_key: |\n  multiline-profile-secret\n  second-line-profile-secret\n'
+                 'auth:\n  user: subtree-user-secret\n  method: subtree-method-secret\n'
+                 'tokens:\n  - list-under-secret-key\n'
+                 'deploy_notes: >\n  run it with\n  TOKEN=folded-profile-secret\n'
+                 'empty_password:\n'
+                 'Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9: key-is-the-secret')
         result = self.read(f'{head}\n{extra}{sep}{body}')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('repository: acme/api', result.stdout)
-        self.assertTrue(result.stdout.endswith(
-            'notes_url: <withheld>\napi_token: <withheld>\nextra:\n  - <withheld>\n  - <withheld>\n'), result.stdout)
+        self.assertEqual(result.stdout.splitlines(), EXAMPLE_VALUES + [
+            'notes_url: <withheld>', 'api_token: <withheld>', 'extra[0]: <withheld>', 'extra[1]: <withheld>',
+            'api_key: <withheld>', 'auth: <withheld>', 'tokens: <withheld>', 'deploy_notes: <withheld>',
+            'empty_password: null', '<withheld>: <withheld>'])
         self.assertNotIn('secret', result.stdout)
         self.assertNotIn('Ab1Cd2', result.stdout)
         self.assertNotIn('## ', result.stdout)
+
+
+def git_repo(path, origin, *, commit=None, remote_branches=()):
+    """A local checkout at `path` with `origin` and remote-tracking branches, and no network."""
+    git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-C', str(path)]
+    path.mkdir(parents=True)
+    subprocess.run(git + ['init', '-q', '-b', 'main'], check=True)
+    subprocess.run(git + ['remote', 'add', 'origin', origin], check=True)
+    for name, text in (commit or {'README.md': 'fixture\n'}).items():
+        (path / name).parent.mkdir(parents=True, exist_ok=True)
+        (path / name).write_text(text)
+    subprocess.run(git + ['add', '.'], check=True)
+    subprocess.run(git + ['commit', '-qm', 'fixture'], check=True)
+    for branch in ('main', *remote_branches):
+        subprocess.run(git + ['update-ref', f'refs/remotes/origin/{branch}', 'HEAD'], check=True)
+    subprocess.run(git + ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'], check=True)
+
+
+class ControlRepositoryTest(unittest.TestCase):
+    """US2 scenario 1: resolve the control repository, read its profile, and let the stored values win."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.ws = Path(self.tmp.name).resolve()
+        self.api = self.ws / 'api'
+        git_repo(self.api, 'https://user:remote-url-secret@github.com/acme/api.git', remote_branches=('develop',))
+        example = (SKILL / 'references/example-profile.md').read_text()
+        git_repo(self.ws / 'control', 'git@github.com:Acme/Control.git', commit={'profile/api.md': example})
+        git_repo(self.ws / 'acme-autopilot', 'https://github.com/acme/acme-autopilot.git')
+        git_repo(self.ws / 'specs', 'https://github.com/acme/specs.git', commit={'.specify/memory/x.md': 'x\n'})
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def candidates(self, env=None):
+        result = subprocess.run(['bash', '-c', CONTROL], capture_output=True, text=True, timeout=60, cwd=self.api,
+                                env={**os.environ, 'PWD': str(self.api), **(env or {})})
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        return result.stdout.splitlines()
+
+    def test_named_control_repository_wins_over_conventional_names(self):
+        (self.ws / 'AGENTS.md').write_text('# Workspace\n\n- **Control repository**: `acme/control` (specs, profiles)\n')
+        self.assertEqual(self.candidates(), ['named acme/control', f'candidate {self.ws}/control Acme/Control'])
+
+    def test_named_as_a_url_in_the_checkout_readme(self):
+        (self.api / 'README.md').write_text('Control repository: https://github.com/acme/control.git\n')
+        self.assertEqual(self.candidates(), ['named acme/control', f'candidate {self.ws}/control Acme/Control'])
+
+    def test_autopilot_sibling_otherwise_and_several_mean_ask(self):
+        self.assertEqual(self.candidates(), [f'candidate {self.ws}/acme-autopilot acme/acme-autopilot'])
+        git_repo(self.ws / 'repos/beta-autopilot', 'git@github.com:acme/beta-autopilot.git')
+        self.assertEqual(self.candidates({'REPOS_DIR': str(self.ws / 'repos')}), [
+            f'candidate {self.ws}/acme-autopilot acme/acme-autopilot',
+            f'candidate {self.ws}/repos/beta-autopilot acme/beta-autopilot'])
+
+    def test_stored_profile_values_are_the_defaults(self):
+        (self.ws / 'AGENTS.md').write_text('Control repository: acme/control\n')
+        status = {path: run('git status --porcelain', cwd=path).stdout for path in (self.api, self.ws / 'control')}
+        candidate = self.candidates()[-1].split(' ')
+        self.assertEqual(candidate, ['candidate', str(self.ws / 'control'), 'Acme/Control'])
+
+        read = PROFILE.replace(PROFILE.split('\n', 1)[0], PROFILE_OFFLINE).replace('<repo>', 'api')
+        profile = subprocess.run(['bash', '-c', read], capture_output=True, text=True, timeout=60,
+                                 env={**os.environ, 'AP': candidate[1]})
+        self.assertEqual(profile.returncode, 0, profile.stderr)
+        self.assertIn('branches.model: trunk', profile.stdout.splitlines())
+
+        # The checkout says git-flow: it has a remote `develop` branch.
+        self.assertIn('origin/develop', run('git branch -r', cwd=self.api).stdout)
+        checkout = 'branches.develop: develop\nbranches.model: git-flow\nbranches.tags: v*\ndeploy[1].kind: docker-compose'
+        merged = subprocess.run(['bash', '-c', MERGE], capture_output=True, text=True, timeout=60,
+                                env={**os.environ, 'defaults': profile.stdout, 'checkout': checkout})
+        self.assertEqual(merged.returncode, 0, merged.stderr)
+        lines = merged.stdout.splitlines()
+        for line in ('branches.default: main (profile)', 'branches.develop: main (profile), checkout: develop',
+                     'branches.model: trunk (profile), checkout: git-flow', 'branches.tags: v* (profile)',
+                     'data_stores[0].managed_by: Cloud SQL (profile)'):
+            self.assertIn(line, lines)
+        self.assertEqual(lines[-1], 'deploy[1].kind: docker-compose')
+        self.assertEqual(len(lines), len(EXAMPLE_VALUES) + 1)
+        for path, before in status.items():
+            self.assertEqual(run('git status --porcelain', cwd=path).stdout, before)
 
 
 class EnvironmentKeyNamesTest(unittest.TestCase):

@@ -35,38 +35,100 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
 To see them, use `ls -a` on the root and on each directory that holds a
 manifest; it prints names only.
 
+To fill the last column, keep the profile filter's output as `defaults` and
+write the checkout's proposals in the same `key: value` form as `checkout`
+(for example `branches.model: git-flow`). This merge keeps the profile's
+value, marks it "(profile)", and adds the checkout's value only when it
+differs:
+
+```sh
+printf '%s\n' "$defaults" '# checkout' "$checkout" | awk '$0 == "# checkout" { c = 1; next }
+/^$/ { next }
+{ k = $0; sub(/: .*/, "", k); v = substr($0, length(k) + 3) }
+!(k in pv) && !(k in cv) { o[++n] = k }
+!c { pv[k] = v; next }
+{ cv[k] = v }
+END { for (i = 1; i <= n; i++) { k = o[i]
+  if (k in pv) print k ": " pv[k] " (profile)" ((k in cv) && cv[k] != pv[k] ? ", checkout: " cv[k] : ""); else print k ": " cv[k] } }'
+```
+
+## Control repository
+
+List the checkouts that can be `$AP` (SKILL.md Step 1 item 2) with the
+command below, run from the product checkout. It takes the first
+`owner/name` on a line of `AGENTS.md` or `README.md` (the checkout's or its
+parent's) that mentions the control repository, prints it as `named`, and
+prints each git checkout at or under the current directory, its parent, or
+`$REPOS_DIR` whose `origin` is that repository (case-insensitively). With no
+name, it prints the `*-autopilot` checkouts instead. A checkout is never a
+candidate because it holds `.specify/`. The remote's user information is
+dropped. One `candidate` line gives `AP=<path>` and `AP_REPO=<owner/name>`;
+zero or several mean ask.
+
+```sh
+want=$(cat AGENTS.md README.md ../AGENTS.md ../README.md 2>/dev/null | grep -i 'control repo' |
+  sed -E 's#(https?://|git@)github\.com[:/]##g' | grep -oE '[A-Za-z0-9-]+/[A-Za-z0-9_.-]+' | sed 's/\.git$//' | head -n 1)
+[ -n "$want" ] && echo "named $want"
+for d in "$PWD" "$PWD"/* "${PWD%/*}" "${PWD%/*}"/* ${REPOS_DIR:+"$REPOS_DIR"/*}; do
+  [ -e "$d/.git" ] || continue
+  r=$(git -C "$d" remote get-url origin 2>/dev/null | sed -E 's#^[a-z+]+://[^/]*/##; s#^[^/:]*:##; s#\.git/?$##')
+  if [ -n "$want" ]; then [ "$(echo "$r" | tr A-Z a-z)" = "$(echo "$want" | tr A-Z a-z)" ] || continue
+  else case "${d##*/}" in *-autopilot) ;; *) continue ;; esac; fi
+  echo "candidate $d $r"
+done | sort -u
+```
+
 ## Existing profile
 
 Never print the profile as fetched. Hold it in a variable and pass it
-through this filter, which validates it first. A file that does not open
-with a `---` front matter block holding `profile: 1` prints one
-`unreadable:` line and nothing from the file. A readable one prints its
-front matter only. A line whose value looks like a credential (a URL with
-user information, a fragment or a query string; a known token prefix; a
-private key; a `NAME=value` pair; a long mixed-case or hex string; or a key
-named like a secret) prints its key and `<withheld>`. A missing file prints
+through this filter, which parses its front matter with PyYAML first. A
+file that does not open with a `---` front matter block, whose block is not
+closed or does not parse as YAML, or whose `profile` is not the number `1`
+prints one `unreadable:` line and nothing from the file; so does a machine
+without PyYAML (the person can install it and re-run). The checkout's own
+files are dropped from Python's import path, so none of them runs. A readable one
+prints each front matter value as one `key.path: value` line
+(`ci.gates[0]: lint`), comments dropped. A key named like a secret (it
+contains `KEY`, `SECRET`, `TOKEN`, `PASS`, `PWD`, `DSN`, `CREDENTIAL`,
+`PRIVATE` or `AUTH`) prints `<withheld>` for its whole value, a block, list
+or multi-line string included. Any other value that looks like a credential
+(a URL with user information, a fragment or a query string; a known token
+prefix; a private key; a `NAME=value` pair; a long mixed-case or hex
+string), on any of its lines, prints `<withheld>`. A missing file prints
 nothing, and `gh` reports `HTTP 404`. Offline, the first line is
 `p=$(git -C "$AP" show origin/HEAD:profile/<repo>.md) &&`.
 
 ```sh
 p=$(gh api -H 'Accept: application/vnd.github.raw' "repos/$AP_REPO/contents/profile/<repo>.md") &&
-printf '%s\n' "$p" | awk 'function risky(s,   r) {
-    if (s ~ /:\/\/[^\/[:space:]]*@|:\/\/[^[:space:]]*#|\?|-----BEGIN|PRIVATE KEY|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]/) return 1
-    if (s ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
-    while (match(s, /[A-Za-z0-9+\/=_-]+/)) { r = substr(s, RSTART, RLENGTH); s = substr(s, RSTART + RLENGTH)
-      if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
-    return 0 }
-  { sub(/\r$/, "") }
-  NR == 1 { if ($0 != "---") { print "unreadable: no front matter"; bad = 1; exit } next }
-  $0 == "---" { closed = 1; exit }
-  { fm[++n] = $0; if ($0 ~ /^profile:[[:space:]]*1[[:space:]]*(#.*)?$/) ok = 1 }
-  END { if (bad) exit 1
-    if (!closed || !ok) { print "unreadable: " (closed ? "not profile: 1" : "front matter not closed"); exit 1 }
-    for (x = 1; x <= n; x++) { l = fm[x]; k = ""
-      if (match(l, /^[[:space:]]*(- )?[A-Za-z0-9_.-]+:/)) k = substr(l, 1, RLENGTH)
-      if (k != "" && toupper(k) ~ /KEY|SECRET|TOKEN|PASS|PWD|DSN|CREDENTIAL|PRIVATE|AUTH/ && substr(l, length(k) + 1) ~ /[^[:space:]]/ || risky(l))
-        print (k != "" && !risky(k) ? k " " : substr(l, 1, match(l, /[^[:space:]-]/) - 1)) "<withheld>"
-      else print l } }'
+printf '%s\n' "$p" | python3 -E -c '
+import sys; sys.path[:] = [x for x in sys.path if x not in ("", ".")]
+import re
+def stop(why): print("unreadable: " + why); sys.exit(1)
+try: import yaml
+except ImportError: stop("PyYAML is not installed")
+t = sys.stdin.read().replace("\r\n", "\n").split("\n")
+if t[0] != "---": stop("no front matter")
+if "---" not in t[1:]: stop("front matter not closed")
+try: d = yaml.safe_load("\n".join(t[1:t.index("---", 1)]))
+except Exception: stop("front matter does not parse")
+if not isinstance(d, dict) or type(d.get("profile")) is not int or d["profile"] != 1: stop("not profile: 1")
+SECRET = re.compile("KEY|SECRET|TOKEN|PASS|PWD|DSN|CREDENTIAL|PRIVATE|AUTH")
+def risky(s):
+    return bool(re.search(r"://[^/\s]*@|://\S*#|\?|-----BEGIN|PRIVATE KEY|[A-Za-z_]\w*=\S|(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)", s)) or any(
+        len(r) >= 24 and re.search("[0-9]", r) and re.search("[a-z]", r) and re.search("[A-Z]", r) or len(r) >= 32 and re.fullmatch("[0-9A-Fa-f]+", r)
+        for r in re.findall(r"[A-Za-z0-9+/=_-]+", s))
+def show(path, v, up=()):
+    if id(v) in up: v = "<alias>"
+    if isinstance(v, dict) and v:
+        for k, x in v.items():
+            k = str(k); bad = risky(k) or SECRET.search(k.upper()) and x not in (None, "", [], {})
+            show((path + "." if path else "") + ("<withheld>" if risky(k) else k), "<withheld>" if bad else x, up + (id(v),))
+    elif isinstance(v, list) and v:
+        for i, x in enumerate(v): show("%s[%d]" % (path, i), x, up + (id(v),))
+    else:
+        s = "[]" if v == [] else "{}" if v == {} else "null" if v is None else str(v).lower() if isinstance(v, bool) else str(v)
+        print(path + ": " + ("<withheld>" if risky(s) else s.replace("\n", "\\n")))
+show("", d)'
 ```
 
 ## Branches
@@ -116,17 +178,22 @@ jobs); `gh api repos/$REPO/rules/branches/<default>` and
 `gh api repos/$REPO/branches/<default>/protection/required_status_checks`
 show required checks when the login can read them. For another CI system, list its job or stage
 names and ask for the gates and trigger. The two GitHub Actions commands
-below follow the file's own indentation and print nothing but names. An
-environment or branch name outside letters, digits, spaces and `_ . / * + ! -`
-prints as `<withheld>`, and a `${{ … }}` expression as `<expression>`; ask
-for those. Read job keys, job names and environment names (plain, quoted,
+below follow the file's own indentation and print nothing but names. A job
+display name, environment or branch name outside letters, digits, spaces and
+`_ . / * + ! -`, or holding a known token prefix or a long mixed-case or hex
+string, prints as `<withheld>`, and a `${{ … }}` expression as
+`<expression>`; ask for those. Read job keys, job names and environment names (plain, quoted,
 an inline `{name: …}` map, or `name:` anywhere in an `environment:` block)
 with:
 
 ```sh
-awk 'function clean(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
+awk 'function clean(v,   s, r) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
   gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v)
-  if (v ~ /\$\{\{/) return "<expression>"; return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
+  if (v ~ /\$\{\{/) return "<expression>"
+  if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return "<withheld>"
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return "<withheld>" }
+  return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
 { sub(/\r$/, "") }
 /^[[:space:]]*(#|$)/ { next }
 { i = match($0, /[^ ]/) - 1; l = substr($0, i + 1) }
@@ -138,7 +205,7 @@ ji < 0 { ji = i }
 i == ji { if (l ~ /^[A-Za-z0-9_-]+:[[:space:]]*(#.*)?$/) { sub(/:.*/, "", l); print NR ": job " l }; pi = -1; next }
 pi < 0 { pi = i }
 i != pi { next }
-l ~ /^name:/ { print NR ": name" substr(l, 6); next }
+l ~ /^name:/ { print NR ": name " clean(substr(l, 6)); next }
 l !~ /^environment:/ { next }
 { v = clean(substr(l, 13)) }
 v == "<withheld>" && substr(l, 13) ~ /^[[:space:]]*(#.*)?$/ { ei = i; next }
@@ -151,9 +218,13 @@ and the `branches`, `branches-ignore`, `tags` and `tags-ignore` names, and
 nothing else: no `workflow_dispatch` input, `paths` or `cron` value.
 
 ```sh
-awk 'function clean(v) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
+awk 'function clean(v,   s, r) { sub(/^[[:space:]]+/, "", v); sub(/[[:space:]]+#.*$/, "", v); sub(/[[:space:]]+$/, "", v)
   gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v)
-  if (v ~ /\$\{\{/) return "<expression>"; return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
+  if (v ~ /\$\{\{/) return "<expression>"
+  if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return "<withheld>"
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return "<withheld>" }
+  return v ~ /^[A-Za-z0-9_.\/*+! -]+$/ ? v : "<withheld>" }
 function each(p, v,   n, t, x) { sub(/[[:space:]]+#.*$/, "", v); gsub(/[][,]/, " ", v); n = split(v, t, " ")
   for (x = 1; x <= n; x++) print NR ": " p clean(t[x]) }
 { sub(/\r$/, "") }
@@ -211,16 +282,26 @@ Take names from these sources:
 
 Read compose services, images and the `Dockerfile`s they build with the
 command below (two-space indentation; adjust the counts for other files).
-A value holding a URL, and a `build:` or `dockerfile:` value holding `:`,
-`@` or `?` (a remote Git context can carry `user:token@`), prints as
-`<withheld>`; a registry host is replaced.
+Trailing comments are dropped. A value holding a URL, a space or `=`, and a
+`build:` or `dockerfile:` value holding `:`, `@` or `?` (a remote Git
+context can carry `user:token@`), prints as `<withheld>`; a registry host is
+replaced.
 
 ```sh
-grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'
+grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*(#.*)?$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'
 ```
 
-Read profiles with
-`awk '/^ +profiles:/{p=1; print NR": "$0; next} p && /^ +- [A-Za-z0-9_-]+ *$/{print NR": "$0; next} {p=0}' <file>`.
+Read profile names (inline or as a list; comments dropped, a name outside
+letters, digits and `_ . -` prints as `<withheld>`) with:
+
+```sh
+awk 'function out(v) { gsub(/"/, "", v); gsub(sprintf("%c", 39), "", v); print NR ": profile " (v ~ /^[A-Za-z0-9_.-]+$/ ? v : "<withheld>") }
+{ sub(/\r$/, ""); l = $0; sub(/[[:space:]]+#.*$/, "", l); sub(/[[:space:]]+$/, "", l) }
+l ~ /^ +profiles:/ { p = 1; sub(/^ +profiles:/, "", l); gsub(/[][,]/, " ", l); n = split(l, t, " "); for (x = 1; x <= n; x++) out(t[x]); next }
+p && l ~ /^ +- / { sub(/^ +- +/, "", l); out(l); next }
+{ p = 0 }' <file>
+```
+
 Never read `environment:`, `command:`, `secrets:` or `args:` blocks. If no source names an environment,
 propose `none`.
 

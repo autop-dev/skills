@@ -69,15 +69,18 @@ accepts, placed next to the product checkout, never inside it).
    otherwise ask again. When `AP_REPO` equals `REPO` (compare owner/name
    case-insensitively, not remote URLs), the person is in the control
    repository: ask which product repository to profile and where its
-   checkout is, and redo item 1 there.
+   checkout is, and redo item 1 there. The candidates command in
+   [references/discovery.md](references/discovery.md) "Control repository"
+   lists the checkouts this rule allows.
 3. **Existing profile.** Read `profile/<repo>.md` from `$AP`'s default
    branch on GitHub (offline, `origin/HEAD`) only through the filter in
    [references/discovery.md](references/discovery.md) "Existing profile",
    which validates it and withholds credential-looking values; never print
    it whole. Not found → no defaults, continue. With `profile: 1` its
-   values are the defaults, and the evidence is shown next to them. Any other version, or front matter
-   that does not parse, is unreadable: say so and stop after the table; the
-   skill never overwrites it.
+   values are the defaults, and the evidence is shown next to them (the
+   merge in discovery.md "The evidence table"). Any other version, or front
+   matter that does not parse as YAML, is unreadable: say so and stop after
+   the table; the skill never overwrites it.
 4. **Evidence.** Follow [references/discovery.md](references/discovery.md):
    branches and `v*` tags with the model rule, CI files and gates, deploy
    manifests with kind and trigger, environments, package manifests to
