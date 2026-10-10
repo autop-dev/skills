@@ -57,19 +57,22 @@ pull requests: [references/personal-to-organisation.md](references/personal-to-o
 
 Report the table above with ✓ / ✗ per row before changing anything.
 
-## Step 2 — Prepare the repository side (ask once, then do)
+## Step 2 — Prepare the repository side (confirm, then do)
 
-Show the person the list of writes and get a yes.
+Show the person the list of writes and get a yes. A write deferred until the
+control repo exists is listed and confirmed again when it comes due.
 
-- **Control repo.** Fill the existing control repo found in Step 1; do not
-  create one by default. When none exists yet, the console creates it while
-  the person creates the project (Step 3), or the person creates it from the
-  console's prefilled link: hand over the console side first, then fill and
-  label the repository once it exists, after listing those writes and getting
-  a yes. Only when the person prefers the manual route and says so, offer
-  `gh repo create <ORG>/<name> --private` with the name they confirm; with
-  "Only select repositories" they then add it to each App themselves.
-  Add an `AGENTS.md` that names the organisation, the board URL
+- **Control repo.** Fill it; do not create one by default.
+  - *Exists* (Step 1 found it): fill it now.
+  - *None yet*: the console creates it while the person creates the project
+    (Step 3, item 2), or the person creates it from the console's prefilled
+    link. Defer filling it and labelling it until it exists.
+  - *Manual route*: only when the person prefers it and says so, offer
+    `gh repo create <ORG>/<name> --private` with the name they confirm, then
+    fill it now; with "Only select repositories" they add it to each App
+    themselves.
+
+  Filling: add an `AGENTS.md` that names the organisation, the board URL
   (`https://github.com/orgs/<ORG>/projects/<N>`), the product repos with one
   line each on their role, the "Source of truth:" repo, and the architecture
   invariants reviewers must enforce. Initialise spec-kit when absent:
@@ -92,26 +95,27 @@ Show the person the list of writes and get a yes.
 
 ## Step 3 — Hand over the console side
 
-Print the remaining person-only steps in order, each with its link:
+Print the remaining person-only steps in order, each with its link. Name
+the Apps the discovery found missing, and say whether a control repo exists.
 
-1. Sign in at https://app.autop.dev and open **Organisations**. Install
-   *Autop ATC*, *Autop Coder* and *Autop Reviewer* on `<ORG>` in that order,
-   from the page's numbered steps, skipping any Step 1 found installed.
-   GitHub asks which repositories each App may see; choose knowingly. **All
-   repositories** is the simple path: it covers every repository, including
-   ones created later such as the control repo. **Only select repositories**
-   is the strict path: it covers only the chosen ones, so a repository
-   created later must be added to each App. Both are supported; an uncovered
-   cell in the page's coverage table links to the settings of the App that
-   lacks the repository.
-2. Create the project: organisation, board, control repo, product repos. For
-   the control repo use **Create it for me** (the console creates
-   `<slug>-autopilot`, `<slug>` being the project's slug), or the prefilled
-   link to create it on GitHub when that action is not offered (the form says
-   when accepting Autop ATC's updated permissions would enable it). Check the
-   agent routes (which profile implements, reviews, repairs) and the merge
-   policy. If the control repo is new, come back before step 4 so this skill
-   fills and labels it (Step 2's control repo and labels bullets).
+1. Sign in at https://app.autop.dev and open **Organisations**. Install the
+   missing Apps on `<ORG>` from the page's numbered steps, in the order
+   *Autop ATC*, *Autop Coder*, *Autop Reviewer*. GitHub asks which
+   repositories each App may see; choose knowingly. **All repositories** is
+   the simple path: it covers every repository, including ones created later
+   such as the control repo. **Only select repositories** is the strict path:
+   it covers only the chosen ones, so a repository created later must be
+   added to each App. Both are supported; an uncovered cell in the page's
+   coverage table links to the settings of the App that lacks the repository.
+2. Create the project: organisation, board, control repo, product repos.
+   Select the control repo when one exists. When none does, let the console
+   create it with **Create `<slug>-autopilot` for me** (`<slug>` is the
+   project's slug), or use the prefilled link to create it on GitHub when
+   that action is not offered (the form says when accepting Autop ATC's
+   updated permissions would enable it). Check the agent routes (which
+   profile implements, reviews, repairs) and the merge policy. If the control
+   repo is new, come back to this skill before step 4 so it fills and labels
+   the repository.
 3. If the project starts paused ("waiting for App access to the control
    repository"), add the control repo to each App the project page lists,
    from its settings links, then Refresh. The project activates by itself once
@@ -129,6 +133,11 @@ Print the remaining person-only steps in order, each with its link:
 5. Smoke test: file one small, reversible story with `autop-add-issue` (a
    documentation change is ideal) and watch its job, PR, review and board
    move in the console.
+
+When the control repo did not exist yet, stop after printing the list and
+wait. When the person comes back after item 2 (or invokes this skill again),
+find the new repository as in Step 1, then list, confirm and do Step 2's
+deferred control repo and labels writes before they go on to item 4.
 
 ## Guardrails
 
