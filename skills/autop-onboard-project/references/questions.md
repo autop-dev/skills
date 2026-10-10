@@ -146,7 +146,13 @@ once the control repository's pull request merges.
   named in the write list. A key the filter withholds only for a substring
   of its name (`monkey_tests` holds `KEY`) is `keep`: copied verbatim,
   still shown as `<withheld>`, and named in the write list as "kept, value
-  not shown".
+  not shown". The same check prints `stop notes`, never a line of it, when
+  the stored `## Notes` text fails the credential test (a `?` before a
+  space or the end of a line is prose, not a query string). It runs once
+  before the interview, right after the branch checks below, and again in
+  Step 3 on the re-fetched file: on `stop notes` say that the stored Notes
+  hold a credential-looking string, never show it, write nothing, and stop;
+  the person removes it from `profile/<repo>.md` by hand and runs again.
 
 ```sh
 printf '%s\n' "$p" | python3 -E -c '
@@ -175,7 +181,9 @@ def unknown(path, v, known):
 unknown("", d, KNOWN[""])
 for key in ("branches", "ci"): unknown(key + ".", d.get(key), KNOWN[key])
 for key in ("deploy", "environments", "services", "data_stores"):
-    for i, x in enumerate(d.get(key) if isinstance(d.get(key), list) else ()): unknown("%s[%d]." % (key, i), x, KNOWN[key])'
+    for i, x in enumerate(d.get(key) if isinstance(d.get(key), list) else ()): unknown("%s[%d]." % (key, i), x, KNOWN[key])
+b = t[t.index("---", 1) + 1:]
+if "## Notes" in b and risky(re.sub(r"\?(?!\S)", "", "\n".join(b[b.index("## Notes") + 1:]))): print("stop notes")'
 ```
 
 - **`updated`** is set to today. A repository whose file would not change
@@ -201,9 +209,9 @@ for key in ("deploy", "environments", "services", "data_stores"):
   The write list then names the branch that will be used; nothing is asked
   after the yes.
   A local branch of that name with commits not on its base (`origin/<branch>`
-  when it exists, else `origin/<default>`) → show
-  `git log --oneline <base>..<branch>` and ask, also before the interview,
-  before `-B` resets it.
+  when it exists, else `origin/<default>`) → show its commits through the
+  mask below (`git log --format='%h %s' <base>..<branch> | mask 1`) and
+  ask, also before the interview, before `-B` resets it.
 - A worktree left by an interrupted run, checked before the branches
   above: `git worktree list --porcelain` names it. Only a worktree on
   `onboard/profile-<repo>`, `onboard/agents-<repo>` or one of their `-2`,
@@ -211,7 +219,25 @@ for key in ("deploy", "environments", "services", "data_stores"):
   nothing in `git -C <path> status --porcelain` → `git worktree remove
   <path>` (never `--force`), then `git worktree prune`. One with
   uncommitted or untracked files → show its path and
-  `git -C <path> status --short` and ask, before the interview, whether
+  `git -C <path> status --short` through the mask below
+  (`git -C <path> status --short | mask 0`) and ask, before the interview, whether
   to discard them. It is kept unless the answer is an explicit yes; only
   then `git worktree remove --force <path>`. A kept worktree's branch
   counts as taken: the run uses the next free name (above).
+
+A commit subject or a file name can hold a credential, so neither is shown
+raw. `mask` keeps each line's short hash (`mask 1`) or two-letter status
+(`mask 0`) and prints the rest as `<withheld>` when it fails the credential
+test of discovery.md (a known token prefix, a long mixed-case or hex string,
+a private key, a `NAME=value` pair, a URL with user information, a query
+string or a fragment); a file name outside letters, digits, spaces and
+`_ . / @ + -` is withheld too, as in discovery.md "Opening files":
+
+```sh
+mask() { awk -v c="$1" 'function risky(v,   s, r) { if (v ~ /:\/\/[^\/ ]*@|:\/\/[^ ]*[?#]|-----BEGIN|PRIVATE KEY|[A-Za-z_][A-Za-z0-9_]*=[^ ]|(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ h = c ? substr($0, 1, index($0, " ")) : substr($0, 1, 3); t = substr($0, length(h) + 1)
+  print h (risky(t) || !c && t !~ /^[A-Za-z0-9_.\/@+ -]+$/ ? "<withheld>" : t) }'; }
+```
