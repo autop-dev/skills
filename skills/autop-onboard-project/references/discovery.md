@@ -78,7 +78,9 @@ path prints one `skipped` line instead (a tracked `compose.yml` or
 `.env.example` can point at `.env`). List skipped paths as "not opened". A
 path holding a character outside letters, digits, spaces and
 `_ . / @ + -`, a known token prefix or a long mixed-case or hex string is
-never opened and prints as `skipped <withheld>: not opened`.
+never opened and prints as `skipped <withheld>: not opened`. A path that
+starts with `-` prints as `./<path>`, so that no command reads it as an
+option.
 
 ```sh
 while IFS= read -r f; do d=$(CDPATH= cd -- "$(dirname -- "$f")" 2>/dev/null && pwd -P)
@@ -92,7 +94,7 @@ done | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|git
   return 0 }
 { t = substr($0, 1, index($0, "\t") - 1); f = substr($0, length(t) + 2) }
 risky(f) || f !~ /^[A-Za-z0-9_.\/@+ -]+$/ { print "skipped <withheld>: not opened"; next }
-t == "open" { print f; next }
+t == "open" { print (f ~ /^-/ ? "./" : "") f; next }
 { print "skipped " f ": not opened" }'
 ```
 
@@ -290,11 +292,12 @@ END { if (!n) { m = "trunk"; rel = dev = d } else if ("develop" in b || "develop
 
 ## CI and deploy files
 
-List tracked files only, and pass each listing through the guard
+List tracked and untracked files (an untracked file that `.gitignore`
+excludes is not listed), and pass each listing through the guard
 ("Opening files"), for example with
-`git ls-files -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml azure-pipelines.yml bitbucket-pipelines.yml .travis.yml '.buildkite/*'`
+`git ls-files -co --exclude-standard -- '.github/workflows/*.yml' '.github/workflows/*.yaml' .gitlab-ci.yml Jenkinsfile 'cloudbuild.y*ml' .circleci/config.yml azure-pipelines.yml bitbucket-pipelines.yml .travis.yml '.buildkite/*'`
 and
-`git ls-files -- ':(exclude).github/*' ':(exclude)*.md' '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
+`git ls-files -co --exclude-standard -- ':(exclude).github/*' ':(exclude)*.md' '*Dockerfile*' '*compose*.y*ml' '*serverless.yml' '*firebase.json' '*.tf' app.yaml '*/app.yaml' '*fly.toml' '*render.yaml' '*vercel.json' '*netlify.toml' '*Procfile' '*k8s/*' '*helm/*'`.
 
 | CI file | `ci.system` |
 |---|---|
@@ -401,7 +404,7 @@ the command below; a type holding a known token prefix or a long hex string
 prints as `<withheld>`:
 
 ```sh
-grep -hoE '^(resource|provider) "[a-z0-9_]+"' <files> | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+grep -hoE '^(resource|provider) "[a-z0-9_]+"' -- <files> | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
   for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
     if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
   return 0 }
@@ -542,10 +545,17 @@ jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[p
 For `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
 `pubspec.yaml` and `*.csproj` (list them with
 `git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`
-through the guard), print only the table names they contain:
+through the guard), print only the table names they contain. A line holding
+a URL (`://`) is not read, and a name holding a known token prefix or a
+long mixed-case or hex string prints as `<withheld>`:
 
 ```sh
-grep -ohiE '(^|[^a-z])(stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?)([^a-z]|$)' <files> | sort -u
+p='stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?'
+grep -hv '://' -- <files> | grep -oiE "(^|[^a-z])($p)([^a-z]|$)" | grep -oiE "$p" | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ print (risky($0) ? "<withheld>" : $0) }' | sort -u
 ```
 
 Match a package by its name, without version or extras:

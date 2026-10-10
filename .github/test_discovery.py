@@ -53,7 +53,8 @@ ENV_NAMES = fenced("awk 'function closes(")
 PRISMA = fenced("git grep -hE '^[[:space:]]*provider")
 GUARD = fenced('while IFS= read -r f;')
 FORBIDDEN = fenced('for d in . <directories>;')
-MANIFESTS = inline("git ls-files -- ':(exclude).github/*'")
+MANIFESTS = inline("git ls-files -co --exclude-standard -- ':(exclude).github/*'")
+CI_FILES = inline("git ls-files -co --exclude-standard -- '.github/workflows/*.yml'")
 GH_ENVIRONMENTS = inline('gh api repos/$REPO/environments --jq ')
 GH_RULES = inline('gh api repos/$REPO/rules/branches/<default> --jq ')
 GH_PROTECTION = inline('gh api repos/$REPO/branches/<default>/protection/required_status_checks --jq ')
@@ -61,6 +62,7 @@ PRODUCT = fenced('r=$(git remote get-url origin')
 MODEL = fenced("awk '$1 == \"default\"")
 PACKAGE_JSON, COMPOSER_JSON = fenced("jq -r 'def safe:").splitlines()
 TERRAFORM = fenced("grep -hoE '^(resource|provider)")
+DEPENDENCIES = fenced("p='stripe|")
 
 WORKFLOW = """\
 name: Deploy
@@ -434,6 +436,66 @@ volumes:
                 'resource "google_cloud_run_v2_service"'])
             for value in ('Credential', 'secret', '0123456789abcdef', 'github_pat'):
                 self.assertNotIn(value, result.stdout)
+
+    def test_dependency_names_are_masked(self):
+        """FR-013: a URL line is never read, and a matched name holding a credential is withheld."""
+        with tempfile.TemporaryDirectory() as tmp:
+            requirements, gomod = Path(tmp) / 'requirements.txt', Path(tmp) / 'go.mod'
+            requirements.write_text(
+                '--index-url https://user:psycopg-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9@pypi.example.com/simple\n'
+                '--extra-index-url https://user:redis-short-secret@pypi.example.com/simple\n'
+                'psycopg[binary]>=3\nsentry-sdk==2.0\n# mysql-Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9\n')
+            gomod.write_text('module example.com/app\nrequire github.com/stripe/stripe-go/v76 v76.0.0\n')
+            result = run(DEPENDENCIES.replace('<files>', f'{shlex.quote(str(requirements))} {shlex.quote(str(gomod))}'))
+            self.assertEqual((result.returncode, result.stderr), (0, ''))
+            self.assertEqual(sorted(result.stdout.splitlines()), ['<withheld>', 'psycopg', 'sentry', 'stripe'])
+            for value in ('Ab1Cd2', 'secret', 'redis', 'pypi'):
+                self.assertNotIn(value, result.stdout)
+
+    def test_option_like_paths_are_never_options(self):
+        """FR-012: a permitted `-fsecrets.tf` never makes a command open the forbidden `secrets.tf`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / 'app'
+            git_repo(app, 'https://github.com/acme/app.git', commit={
+                '-fsecrets.tf': 'resource "aws_instance" "web" {}\n',
+                '-frequirements.txt': 'stripe==8\n',
+                'secrets.tf': 'resource "ghp_forbiddenCredential" "x" {}\n'})
+            (app / 'secrets.tf').chmod(0)  # any read of the forbidden file now fails loudly on stderr
+            listed = run(f"{{ {MANIFESTS}; echo -frequirements.txt; }} | {GUARD}", cwd=app)
+            self.assertEqual((listed.returncode, listed.stderr), (0, ''))
+            self.assertEqual(listed.stdout.splitlines(),
+                             ['./-fsecrets.tf', 'skipped secrets.tf: not opened', './-frequirements.txt'])
+            for command, files, expected in ((TERRAFORM, ('./-fsecrets.tf', '-fsecrets.tf'), ['resource "aws_instance"']),
+                                             (DEPENDENCIES, ('./-frequirements.txt', '-frequirements.txt'), ['stripe'])):
+                for file in files:
+                    with self.subTest(file=file):
+                        result = run(command.replace('<files>', shlex.quote(file)), cwd=app)
+                        self.assertEqual((result.returncode, result.stderr), (0, ''))
+                        self.assertEqual(result.stdout.splitlines(), expected)
+            (app / 'secrets.tf').chmod(0o600)
+
+    def test_untracked_ci_and_deploy_files_are_listed(self):
+        """FR-010: a present but uncommitted workflow or deploy manifest is discovered; an ignored one is not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / 'app'
+            git_repo(app, 'https://github.com/acme/app.git',
+                     commit={'.gitignore': 'ignored/\n', 'Dockerfile': 'FROM node:22\n'})
+            for name, text in (('.github/workflows/deploy.yml', 'on: [push]\njobs:\n  deploy:\n    environment: production\n'),
+                               ('fly.toml', 'app = "api"\n'), ('deploy/compose.yml', 'services:\n  api:\n'),
+                               ('ignored/compose.yml', 'services:\n  ignored:\n'),
+                               ('ignored/.github/workflows/x.yml', 'jobs:\n')):
+                (app / name).parent.mkdir(parents=True, exist_ok=True)
+                (app / name).write_text(text)
+            status = run('git status --porcelain', cwd=app).stdout
+            ci = run(f'{CI_FILES} | {GUARD}', cwd=app)
+            self.assertEqual((ci.returncode, ci.stderr), (0, ''))
+            self.assertEqual(ci.stdout.splitlines(), ['.github/workflows/deploy.yml'])
+            manifests = run(f'{MANIFESTS} | {GUARD}', cwd=app)
+            self.assertEqual((manifests.returncode, manifests.stderr), (0, ''))
+            self.assertEqual(sorted(manifests.stdout.splitlines()), ['Dockerfile', 'deploy/compose.yml', 'fly.toml'])
+            jobs = run(JOBS.replace('<file>', '.github/workflows/deploy.yml'), cwd=app)
+            self.assertEqual(jobs.stdout.splitlines(), ['3: job deploy', '4: environment production'])
+            self.assertEqual(run('git status --porcelain', cwd=app).stdout, status)
 
     def test_symlinked_and_forbidden_manifests_are_not_opened(self):
         """A tracked `compose.yml` that points at `.env`, and other paths the guard keeps every read from."""
