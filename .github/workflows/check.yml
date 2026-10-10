@@ -1,5 +1,13 @@
 name: Check skills
-on: [push, pull_request, workflow_dispatch]
+on:
+  # PRs into `epic/*` integration branches run no CI (control C56): ATC merges
+  # children on its own `Autop / …` statuses, and the epic release PR into
+  # main carries the whole integration through these gates.
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -12,3 +20,6 @@ jobs:
           python-version: '3.13'
       - run: pip install PyYAML
       - run: python .github/check.py
+      - run: python .github/test_check.py -v
+      - run: python .github/test_discovery.py -v
+      - run: python .github/test_questions.py -v
