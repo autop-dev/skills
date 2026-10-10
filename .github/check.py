@@ -43,11 +43,17 @@ for key in PROFILE_KEYS:
         node = node.get(part) if isinstance(node, dict) else None
     if node is None:
         errors.append(f'{rel}: missing {key}')
-values = [('', profile)]
+values, seen = [('', profile)], set()
 while values:
     key, value = values.pop()
+    if isinstance(value, (dict, list)):
+        if id(value) in seen:  # YAML aliases can share or nest a container in itself
+            continue
+        seen.add(id(value))
     if isinstance(value, dict):
-        values.extend((f'{key}.{k}' if key else str(k), v) for k, v in value.items())
+        for k, v in value.items():
+            path = f'{key}.{k}' if key else str(k)
+            values.extend(((path, k), (path, v)))
     elif isinstance(value, list):
         values.extend((f'{key}[{i}]', v) for i, v in enumerate(value))
     elif isinstance(value, str) and (re.search(r'[A-Za-z][A-Za-z0-9+.-]*://\S*@', value) or '?' in value):
