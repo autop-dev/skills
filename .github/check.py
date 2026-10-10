@@ -1,4 +1,4 @@
-"""Validate skill metadata and reject recognizable credential formats."""
+"""Validate skill metadata and the profile example, and reject recognizable credential formats."""
 from pathlib import Path
 import re
 import yaml
@@ -23,10 +23,45 @@ for path in skills:
         assert isinstance(meta.get('description'), str) and meta['description'].strip()
     except (AssertionError, yaml.YAMLError):
         errors.append(f'{path.relative_to(root)}: invalid name/description frontmatter')
+PROFILE_KEYS = ('repository', 'updated', 'branches.default', 'branches.release', 'branches.develop',
+                'branches.model', 'ci.system', 'deploy', 'environments', 'services', 'data_stores')
+example = root / 'skills/autop-onboard-project/references/example-profile.md'
+rel = example.relative_to(root)
+match = re.match(r'\A---\r?\n(.*?)\r?\n---(?:\r?\n|\Z)', example.read_text() if example.is_file() else '', re.S)
+try:
+    profile = yaml.safe_load(match[1]) if match else None
+except (yaml.YAMLError, ValueError):
+    profile = None
+if not isinstance(profile, dict):
+    errors.append(f'{rel}: invalid profile front matter')
+    profile = {}
+elif type(profile.get('profile')) is not int or profile['profile'] != 1:
+    errors.append(f'{rel}: profile version must be 1')
+for key in PROFILE_KEYS:
+    node = profile
+    for part in key.split('.'):
+        node = node.get(part) if isinstance(node, dict) else None
+    if node is None:
+        errors.append(f'{rel}: missing {key}')
+values, seen = [('', profile)], set()
+while values:
+    key, value = values.pop()
+    if isinstance(value, (dict, list, tuple, set, frozenset)):
+        if id(value) in seen:  # YAML aliases can share or nest a container in itself
+            continue
+        seen.add(id(value))
+    if isinstance(value, dict):
+        for k, v in value.items():
+            path = f'{key}.{k}' if key else str(k)
+            values.extend(((path, k), (path, v)))
+    elif isinstance(value, (list, tuple, set, frozenset)):  # !!omap/!!pairs load as tuples, !!set as a set
+        values.extend((f'{key}[{i}]', v) for i, v in enumerate(value))
+    elif isinstance(value, str) and (re.search(r'[A-Za-z][A-Za-z0-9+.-]*://\S*@', value) or '?' in value):
+        errors.append(f'{rel}: {key}: URL with user info or query string')
 for path in files:
     content = path.read_bytes().decode('utf-8', errors='replace')
     if any(re.search(pattern, content) for pattern in patterns):
         errors.append(f'{path.relative_to(root)}: token-looking content (value withheld)')
 if errors:
     raise SystemExit('\n'.join(errors))
-print(f'Checked {len(skills)} skills and {len(files)} files: metadata and token scan passed')
+print(f'Checked {len(skills)} skills, {rel} and {len(files)} files: metadata, profile example and token scan passed')
