@@ -37,10 +37,61 @@ repository's `profile/README.md` is written once, verbatim from
 
 ## Step 1 — Discover (read-only)
 
-Resolve the product repository, its organisation and the control repository,
-and read any existing profile there as the defaults.
-Gather the evidence the checkout already holds and show it as a table of
-fact, evidence and proposed default; nothing is written.
+Nothing is written in this step: no file, branch, commit, fetch, checkout or
+install, in any checkout (only a clone of the control repository the person
+accepts, placed next to the product checkout, never inside it).
+`git status --porcelain` reads the same before and after.
+
+1. **`gh` and the product repository.** `gh auth status` must show a login.
+   In the checkout, read `origin` and `gh repo view` only through the
+   command in [references/discovery.md](references/discovery.md) "Product
+   repository", never printed whole: it keeps `<owner>/<name>` alone from
+   the remote URL (user info, query string and fragment, which can hold a
+   token, are dropped; SSH and HTTPS remotes are both valid) and masks a
+   credential-looking repository or default branch name. It gives
+   `REPO=<org>/<repo>` and the default branch. A fork → ask for the
+   organisation repository's checkout. Not a git checkout → ask for
+   the product repository's path. `isInOrganization` false → say the
+   profile belongs to an organisation project, point at the setup skill's
+   [personal-to-organisation.md](../autop-setup-project/references/personal-to-organisation.md),
+   and stop.
+2. **Control repo `$AP`.** Prefer the repository/path explicitly named by
+   the user or the workspace's `AGENTS.md` / `README.md` as the **Control
+   repository**. The name is arbitrary: `autop-dev/control` is valid. Resolve
+   it to a local git checkout and verify `origin` matches that GitHub repo.
+   Otherwise look for a conventional `*-autopilot/` checkout at/under cwd or
+   its parent, then in the runner's `repos_dir`. Never select a repo merely
+   because it contains `.specify/`. Zero or several candidates → ask which
+   repository is configured as the project's control repo in the Autop console;
+   offer to clone that exact repo if absent. No control repo → finish this
+   step and stop after the table; the profile is never written to the product
+   repository. Set `AP_REPO=<owner>/<actual-repo-name>` from the verified
+   `origin` (SSH and HTTPS remotes are both valid); never synthesize a
+   repository name. `$AP`'s owner must be `<org>` (case-insensitively);
+   otherwise ask again. When `AP_REPO` equals `REPO` (compare owner/name
+   case-insensitively, not remote URLs), the person is in the control
+   repository: ask which product repository to profile and where its
+   checkout is, and redo item 1 there. The candidates command in
+   [references/discovery.md](references/discovery.md) "Control repository"
+   lists the checkouts this rule allows.
+3. **Existing profile.** Read `profile/<repo>.md` from `$AP`'s default
+   branch on GitHub (offline, `origin/HEAD`) only through the filter in
+   [references/discovery.md](references/discovery.md) "Existing profile",
+   which validates it and withholds credential-looking values; never print
+   it whole. Not found → no defaults, continue. With `profile: 1` its
+   values are the defaults, and the evidence is shown next to them (the
+   merge in discovery.md "The evidence table"). Any other version, or front
+   matter that does not parse as YAML, is unreadable: say so and stop after
+   the table; the skill never overwrites it.
+4. **Evidence.** Follow [references/discovery.md](references/discovery.md):
+   branches and `v*` tags with the model rule, CI files and gates, deploy
+   manifests with kind and trigger, environments, package manifests to
+   services, example environment files to key *names* only (secret-looking
+   names marked), compose images and driver packages to data stores. Never
+   open a forbidden file.
+5. **Show** the evidence table (fact · evidence · proposed default), the
+   files opened, and the forbidden files seen but not opened. No value from
+   an environment file and no credential-looking string appears.
 
 ## Step 2 — Interview
 
@@ -75,9 +126,11 @@ the control repository, and the next step: file the first story with
 - Nothing from an environment file beyond key names reaches the profile or
   the transcript: open only `.env.example`, `.env.sample`, `.env.template`
   and `.env.dist`, read names only, never a value, and never open `.env`,
-  `.env.local`, `.env.production`, `*.pem`, `*.key`, `secrets*` or
-  `credentials*`. No credential, URL with user information or query string,
-  or internal hostname the person did not volunteer goes into the profile
+  `.env.local`, `.env.production`, `*.pem`, `*.key`, `secrets*`,
+  `credentials*` or the other files listed in
+  [references/discovery.md](references/discovery.md). No credential, URL
+  with user information or query string, or internal hostname the person
+  did not volunteer goes into the profile
   ([references/profile-format.md](references/profile-format.md), "What must
   never appear").
 - Run in a product repository's checkout, not the control repository; the
