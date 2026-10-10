@@ -124,11 +124,11 @@ line "Nothing recorded."
 ## Editing by hand
 
 Edit `profile/<repo>.md` in the control repository like any other document.
-Keep the front matter between the two `---` lines
-valid YAML, keep every required key, use only the enumeration values above,
-and refresh `updated` to the day of the edit. To add a service, append an
-entry with `name` and `purpose` (and `evidence` if you like) to `services`
-and a line to `## Third-party services`. Write prose under the five headings
+Keep the front matter between the two `---` lines valid YAML, keep every
+required key, use only the enumeration values above, and refresh `updated`
+to the day of the edit. To add a service, append an entry with `name` and
+`purpose` (and `evidence` if you like) to `services` and a line to
+`## Third-party services`. Write prose under the five headings
 in their order; put anything that fits nowhere else under `## Notes`, which
 a later run of the skill keeps verbatim, together with any key it does not
 know.

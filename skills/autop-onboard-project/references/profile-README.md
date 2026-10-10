@@ -21,7 +21,8 @@ machine-readable part. Keep it valid YAML, keep `profile: 1` and every
 required key, use only the values `profile-format.md` lists for
 `branches.model`, `ci.system`, `deploy[].kind` and `deploy[].trigger` (for
 example `trunk`, `github-actions`, `cloud-run`, `push-to-release`), and set
-`updated` to the day of your edit. To add a service, append a `name` and a `purpose` under `services`.
+`updated` to the day of your edit. To add a service, append a `name` and a
+`purpose` under `services`.
 
 The prose below it is yours. It has five sections, in this order:
 
