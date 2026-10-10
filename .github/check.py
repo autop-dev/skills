@@ -43,15 +43,15 @@ for key in PROFILE_KEYS:
         node = node.get(part) if isinstance(node, dict) else None
     if node is None:
         errors.append(f'{rel}: missing {key}')
-values = [profile]
+values = [('', profile)]
 while values:
-    value = values.pop()
+    key, value = values.pop()
     if isinstance(value, dict):
-        values.extend(value.values())
+        values.extend((f'{key}.{k}' if key else str(k), v) for k, v in value.items())
     elif isinstance(value, list):
-        values.extend(value)
-    elif isinstance(value, str) and (re.search(r'://[^/\s]*@', value) or '?' in value):
-        errors.append(f'{rel}: URL with user info or query string')
+        values.extend((f'{key}[{i}]', v) for i, v in enumerate(value))
+    elif isinstance(value, str) and (re.search(r'[A-Za-z][A-Za-z0-9+.-]*://\S*@', value) or '?' in value):
+        errors.append(f'{rel}: {key}: URL with user info or query string')
 for path in files:
     content = path.read_bytes().decode('utf-8', errors='replace')
     if any(re.search(pattern, content) for pattern in patterns):
