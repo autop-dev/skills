@@ -544,8 +544,8 @@ jq -r 'def safe: if test("^[A-Za-z0-9@/_.-]+$") and (test("(^|[^A-Za-z0-9])(gh[p
 ```
 
 For `requirements*.txt`, `pyproject.toml`, `go.mod`, `Gemfile`, `Cargo.toml`,
-`pubspec.yaml` and `*.csproj` (list them with
-`git ls-files -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`
+`pubspec.yaml` and `*.csproj` (list them, tracked or untracked, with
+`git ls-files -co --exclude-standard -- '*package.json' '*requirements*.txt' '*pyproject.toml' '*go.mod' '*Gemfile' '*Cargo.toml' '*pubspec.yaml' '*composer.json' '*.csproj'`
 through the guard), print only the table names they contain. A line holding
 a URL (`://`) and a `#` or `//` comment are not read, and the command prints
 only the package names of its own list, never the rest of a line:

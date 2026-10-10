@@ -55,6 +55,7 @@ GUARD = fenced('while IFS= read -r f;')
 FORBIDDEN = fenced('for d in . <directories>;')
 MANIFESTS = inline("git ls-files -co --exclude-standard -- ':(exclude).github/*'")
 CI_FILES = inline("git ls-files -co --exclude-standard -- '.github/workflows/*.yml'")
+PACKAGES = inline("git ls-files -co --exclude-standard -- '*package.json'")
 GH_ENVIRONMENTS = inline('gh api repos/$REPO/environments --jq ')
 GH_RULES = inline('gh api repos/$REPO/rules/branches/<default> --jq ')
 GH_PROTECTION = inline('gh api repos/$REPO/branches/<default>/protection/required_status_checks --jq ')
@@ -511,6 +512,24 @@ volumes:
             self.assertEqual(sorted(manifests.stdout.splitlines()), ['Dockerfile', 'deploy/compose.yml', 'fly.toml'])
             jobs = run(JOBS.replace('<file>', '.github/workflows/deploy.yml'), cwd=app)
             self.assertEqual(jobs.stdout.splitlines(), ['3: job deploy', '4: environment production'])
+            self.assertEqual(run('git status --porcelain', cwd=app).stdout, status)
+
+    def test_untracked_package_manifests_are_listed(self):
+        """FR-011: a present but uncommitted `requirements.txt` yields its data-store hint; an ignored one does not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / 'app'
+            git_repo(app, 'https://github.com/acme/app.git',
+                     commit={'.gitignore': 'ignored/\n', 'package.json': '{"dependencies": {"stripe": "^14"}}\n'})
+            for name, text in (('requirements.txt', 'psycopg[binary]>=3\n'), ('ignored/requirements.txt', 'redis==5\n')):
+                (app / name).parent.mkdir(parents=True, exist_ok=True)
+                (app / name).write_text(text)
+            status = run('git status --porcelain', cwd=app).stdout
+            listed = run(f'{PACKAGES} | {GUARD}', cwd=app)
+            self.assertEqual((listed.returncode, listed.stderr), (0, ''))
+            self.assertEqual(sorted(listed.stdout.splitlines()), ['package.json', 'requirements.txt'])
+            result = run(DEPENDENCIES.replace('<files>', 'requirements.txt'), cwd=app)
+            self.assertEqual((result.returncode, result.stderr), (0, ''))
+            self.assertEqual(result.stdout.splitlines(), ['psycopg'])
             self.assertEqual(run('git status --porcelain', cwd=app).stdout, status)
 
     def test_symlinked_and_forbidden_manifests_are_not_opened(self):
