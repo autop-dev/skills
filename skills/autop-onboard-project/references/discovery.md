@@ -153,14 +153,41 @@ show("", d)'
 ## Branches
 
 - **Default branch**: `defaultBranchRef` from Step 1 item 1. If that
-  failed, use `git symbolic-ref --short refs/remotes/origin/HEAD`
-  and drop the `origin/` prefix; if neither works, ask.
+  failed, the command below falls back to
+  `git symbolic-ref --short refs/remotes/origin/HEAD` without the
+  `origin/` prefix; if neither works, ask.
 - **Long-lived branches**: from `git ls-remote --heads origin`, keep only
   the default branch and `main`, `master`, `develop`, `development`,
-  `staging`, `production`, `release/*` and `hotfix/*`. Feature branches are not evidence. Offline,
-  use `git branch -r`.
-- **Release tags**: if `git ls-remote --tags origin 'v*'` prints anything,
-  propose `tags: "v*"`. Offline, use `git tag -l 'v*'`.
+  `staging`, `production`, `release/*` and `hotfix/*`. Feature branches are
+  not evidence. Offline, the remote-tracking branches are read instead.
+- **Release tags**: if `git ls-remote --tags origin 'v*'` (offline,
+  `git tag -l 'v*'`) finds any tag, propose `tags: "v*"`.
+
+Never print those refs as listed: a branch or tag name can hold a
+credential. Set `DEFAULT` to the default branch from Step 1 item 1 (empty
+if that failed) and read them with the command below. It prints one
+`default` line, a `branch` line for each long-lived branch only, and
+`tags v*` when a `v*` tag exists, never a tag name, and drops git's own
+messages (an error can quote the remote URL). A name outside letters,
+digits and `_ . / -`, or holding a known token prefix or a long mixed-case
+or hex string, prints as `<withheld>`; after `release/` or `hotfix/`, just
+the rest of the name does.
+
+```sh
+d=${DEFAULT:-$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null)}; d=${d#origin/}
+{ echo "default $d"
+  GIT_TERMINAL_PROMPT=0 git ls-remote --heads origin 2>/dev/null || git for-each-ref --format='%(refname)' refs/remotes/origin/
+  { GIT_TERMINAL_PROMPT=0 git ls-remote --tags origin 'v*' 2>/dev/null || git tag -l 'v*'; } | grep -q . && echo 'tags v*'
+} | awk -v d="$d" 'function clean(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return "<withheld>"
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return "<withheld>" }
+  return v ~ /^[A-Za-z0-9_.\/-]+$/ ? v : "<withheld>" }
+NR == 1 { if (d != "") print "default " clean(d); next }
+$0 == "tags v*" { print; next }
+{ n = $NF; if (!sub(/^refs\/heads\//, "", n) && !sub(/^refs\/remotes\/origin\//, "", n)) next }
+n == d || n ~ /^(main|master|develop|development|staging|production)$/ { print "branch " clean(n); next }
+n ~ /^(release|hotfix)\/./ { p = n; sub(/\/.*/, "", p); print "branch " p "/" clean(substr(n, length(p) + 2)) }'
+```
 - **Model rule**, first match wins:
   1. `develop` or `development` exists: `git-flow`. That branch is
      `develop`. `release` is `main`, else `master`, else the default
@@ -313,21 +340,44 @@ Trailing comments are dropped. A value holding a URL, a space or `=`, and a
 context can carry `user:token@`), prints as `<withheld>`; a registry host
 and an image digest are replaced. A service name or value holding a known
 token prefix or a long mixed-case or hex string prints as `<withheld>`.
+A service's YAML merge of an anchored block (`<<: *name` or
+`<<: [*a, *b]`, the anchor written as `key: &name` over a block, anywhere
+before it) gives the service that block's own `image:` and inline `build:`,
+followed through the block's own merges, unless the service sets the key
+itself; it prints at the line of the merge, under the same rules. An
+anchored inline `{ … }` map is not read; ask about such a service.
 
 ```sh
-awk '{ sub(/\r$/, "") }
+awk 'function find(a, k, d,   n, t, x, v) { if ((a, k) in av) return av[a, k]; if (d > 9 || !(a in am)) return ""
+  n = split(am[a], t, " "); for (x = 1; x <= n; x++) if ((v = find(t[x], k, d + 1)) != "") return v; return "" }
+function aliases(v,   n, t, x, o) { sub(/[[:space:]]+#.*$/, "", v); gsub(/[][,]/, " ", v); n = split(v, t, " ")
+  for (x = 1; x <= n; x++) if (t[x] ~ /^\*./) o = o " " substr(t[x], 2); return o }
+function flush(   k, n, t, x, v) { for (k = 1; mn && k <= 2; k++) if (!(ks[k] in own)) { n = split(ms, t, " ")
+    for (x = 1; x <= n; x++) if ((v = find(t[x], ks[k], 0)) != "") { print mn ":" mp v; break } }
+  mn = 0; split("", own) }
+BEGIN { split("image build", ks, " ") }
+{ sub(/\r$/, "") }
 /^[[:space:]]*(#|$)/ { next }
 { i = match($0, /[^ ]/) - 1; l = substr($0, i + 1) }
-i == 0 { s = (l ~ /^services:[[:space:]]*(#.*)?$/); si = -1; next }
+an != "" && i <= ai { an = "" }
+an != "" && aci < 0 { aci = i }
+an != "" && i == aci { if (l ~ /^image:|^build:[[:space:]]+[^{[:space:]#]/) { k = l; sub(/:.*/, "", k); av[an, k] = l }
+  else if (l ~ /^<<:/) am[an] = aliases(substr(l, 4)) }
+l ~ /^[^#]*:[[:space:]]+&[^[:space:]]+[[:space:]]*(#.*)?$/ { an = l; sub(/^[^&]*&/, "", an); sub(/[[:space:]].*/, "", an); ai = i; aci = -1 }
+i == 0 { flush(); s = (l ~ /^services:[[:space:]]*(#.*)?$/); si = -1; next }
 !s { next }
 si < 0 { si = i }
-i == si { if (l ~ /^[A-Za-z0-9_.-]+:[[:space:]]*(#.*)?$/) print NR ":" $0; fi = -1; b = 0; next }
+i == si { flush(); if (l ~ /^[A-Za-z0-9_.-]+:[[:space:]]*(&[A-Za-z0-9_.-]+[[:space:]]*)?(#.*)?$/) { sub(/:.*/, "", l); print NR ":" substr($0, 1, i) l ":" }
+  fi = -1; b = 0; next }
 i < si { next }
 fi < 0 { fi = i }
-i == fi { b = (l ~ /^build:[[:space:]]*(#.*)?$/); bi = -1; if (l ~ /^image:|^build:[[:space:]]+[^{[:space:]#]/) print NR ":" $0; next }
+i == fi { b = (l ~ /^build:[[:space:]]*(#.*)?$/); bi = -1; k = l; sub(/:.*/, "", k); if (k == "image" || k == "build") own[k]
+  if (k == "<<") { mn = NR; mp = substr($0, 1, i); ms = aliases(substr(l, 4)) }
+  if (l ~ /^image:|^build:[[:space:]]+[^{[:space:]#]/) print NR ":" $0; next }
 !b || i < fi { next }
 bi < 0 { bi = i }
-i == bi && l ~ /^dockerfile:/ { print NR ":" $0 }' <file> | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#; s#@sha256:[0-9a-f]+#@sha256:<digest>#' |
+i == bi && l ~ /^dockerfile:/ { print NR ":" $0 }
+END { flush() }' <file> | sort -t: -k1,1n -s | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#; s#@sha256:[0-9a-f]+#@sha256:<digest>#' |
 awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
   for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
     if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }

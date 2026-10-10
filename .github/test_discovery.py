@@ -40,9 +40,10 @@ def on_file(command, text, name='file.yml'):
 
 JOBS = fenced("awk 'function clean(v,", 'jobs:')
 TRIGGERS = fenced("awk 'function clean(v,", 'function each(')
-COMPOSE = fenced("awk '{ sub(/\\r$/, \"\") }", 'services:')
+COMPOSE = fenced("awk 'function find(", 'services:')
 COMPOSE_PROFILES = fenced("awk 'function out(v,")
 PROFILE = fenced('p=$(gh api ')
+BRANCHES = fenced('d=${DEFAULT:-')
 PROFILE_OFFLINE = inline('p=$(git -C "$AP" show')
 CONTROL = fenced('want=$(')
 MERGE = fenced("printf '%s\\n' \"$defaults\"")
@@ -237,6 +238,48 @@ volumes:
             '19:        image: worker:1'])
         self.assertNotIn('secret', result.stdout)
 
+    def test_compose_merges_inherit_anchored_fields(self):
+        """FR-011: `<<: *database` gives the service the anchor's image, so the PostgreSQL hint is found."""
+        result = on_file(COMPOSE, """\
+x-database: &database
+  image: postgres:17
+  environment:
+    image: merge-env-secret
+x-base: &base # TOKEN=anchor-comment-secret
+  image: redis:7
+x-cache: &cache
+  <<: *base
+  restart: always
+x-bad: &bad
+  image: acme/db:ghp_mergeImageSecret
+x-inline: &inline { image: inline-anchor-secret }
+services:
+  db:
+    <<: *database
+    ports: ["5432:5432"]
+  replica:
+    <<: [*database]
+    image: postgres:16
+  cache:
+    <<: *cache
+  app: &app
+    build: ./app
+    image: acme/app:1
+  worker:
+    build: ./worker
+    <<: [*app, *database]
+  bad:
+    <<: *bad
+  flow:
+    <<: *inline
+""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [
+            '14:  db:', '15:    image: postgres:17', '17:  replica:', '19:    image: postgres:16', '20:  cache:',
+            '21:    image: redis:7', '22:  app:', '23:    build: ./app', '24:    image: acme/app:1', '25:  worker:',
+            '26:    build: ./worker', '27:    image: acme/app:1', '28:  bad:', '29:    image: <withheld>', '30:  flow:'])
+        self.assertNotIn('secret', result.stdout.lower())
+
     def test_compose_profile_names_only(self):
         result = on_file(COMPOSE_PROFILES, """\
 x-common: &common
@@ -427,6 +470,53 @@ def git_repo(path, origin, *, commit=None, remote_branches=()):
     for branch in ('main', *remote_branches):
         subprocess.run(git + ['update-ref', f'refs/remotes/origin/{branch}', 'HEAD'], check=True)
     subprocess.run(git + ['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main'], check=True)
+
+
+class BranchesTest(unittest.TestCase):
+    """FR-013: branch and tag names reach the transcript only through the filter."""
+
+    def refs(self, app, default=''):
+        result = subprocess.run(['bash', '-c', BRANCHES], capture_output=True, text=True, timeout=60, cwd=app,
+                                env={**os.environ, 'DEFAULT': default})
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        return result.stdout.splitlines()
+
+    BRANCH_NAMES = ('develop', 'staging', 'release/1.2', 'release/ghp_releaseCredential', 'hotfix/Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9',
+                    'feature/plain-secret', 'sk-branchCredential', 'production')
+    EXPECTED = ['default main', 'branch develop', 'branch hotfix/<withheld>', 'branch main', 'branch production',
+                'branch release/1.2', 'branch release/<withheld>', 'branch staging', 'tags v*']
+
+    def test_remote_refs_are_filtered_and_masked(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            remote = Path(tmp) / 'remote.git'
+            subprocess.run(['git', 'init', '-q', '--bare', str(remote)], check=True)
+            git_repo(Path(tmp) / 'app', str(remote))
+            app = Path(tmp) / 'app'
+            for tag in ('v1.0', 'v2-ghp_tagCredential', 'other-tag-secret'):
+                subprocess.run(['git', '-C', str(app), 'tag', tag], check=True)
+            subprocess.run(['git', '-C', str(app), 'push', '-q', 'origin', 'HEAD:refs/heads/main', '--tags',
+                            *[f'HEAD:refs/heads/{b}' for b in self.BRANCH_NAMES]], check=True, capture_output=True)
+            subprocess.run(['git', '-C', str(app), 'tag', '-d', 'v1.0', 'v2-ghp_tagCredential', 'other-tag-secret'],
+                           check=True, capture_output=True)
+            status = run('git status --porcelain', cwd=app).stdout
+            out = self.refs(app)
+            self.assertEqual(out, self.EXPECTED)
+            self.assertEqual(self.refs(app, 'ghp_defaultCredential')[0], 'default <withheld>')
+            self.assertEqual(run('git status --porcelain', cwd=app).stdout, status)
+            for value in ('Credential', 'Ab1Cd2', 'secret', 'v1.0', 'v2'):
+                self.assertNotIn(value, '\n'.join(out))
+
+    def test_offline_reads_tracking_branches_and_local_tags(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            git_repo(Path(tmp) / 'app', 'https://user:remote-url-secret@127.0.0.1:9/acme/app.git',
+                     remote_branches=self.BRANCH_NAMES)
+            app = Path(tmp) / 'app'
+            self.assertEqual(self.refs(app), self.EXPECTED[:-1])
+            subprocess.run(['git', '-C', str(app), 'tag', 'v1-sk-localTagCredential'], check=True)
+            out = self.refs(app, 'main')
+            self.assertEqual(out, self.EXPECTED)
+            self.assertNotIn('secret', '\n'.join(out))
+            self.assertNotIn('Credential', '\n'.join(out))
 
 
 class ControlRepositoryTest(unittest.TestCase):
