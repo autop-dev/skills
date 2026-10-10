@@ -18,7 +18,8 @@ Enter or "yes" keeps the default; a number or a name changes it.
   no default and needs an answer, or "none" where the key is optional).
 - **Stated, not asked.** When the evidence settles a fact beyond doubt,
   state it in one line and move on: "Release and develop branch: `main`
-  (the only branch), model `trunk`. Say *change* to correct it." Settled
+  (the only branch), model `trunk`, releases tagged `v*` (or: no release
+  tags). Say *change* to correct it." Every value it fills is named. Settled
   means: one long-lived branch (questions 1–3); the files of exactly one CI
   system (question 4, with its files); a stored value the checkout agrees
   with. Anything else is asked.
@@ -42,7 +43,7 @@ Enter or "yes" keeps the default; a number or a name changes it.
 | 7 | Each environment: name, branch it follows, public URL (one per environment, then "another?") | names from workflow `environment:` keys; branch the release branch for `production`; URL none, never guessed | the long-lived branches for the branch | `environments[]`: `name`, `branch`, `url` (optional keys left out when unanswered) |
 | 8 | Each service hint: confirm or correct its name and purpose; then "a service missing?" with name and purpose | the name and purpose from the evidence table | 1. keep 2. correct 3. drop | `services[]`: `name`, `purpose`, `evidence` (the package or key *name* that showed it; none for an added one) |
 | 9 | Each data store: confirm name and purpose, managing service; then "a store missing?" | the evidence's name; purpose `primary store` for the first; `managed_by` none | 1. keep 2. correct 3. drop | `data_stores[]`: `name`, `purpose`, `managed_by` |
-| 10 | Anything else to record (who deploys, release checklist, freeze windows)? | nothing; on a re-run the stored `## Notes` stays as it is | free text | `## Notes` |
+| 10 | Anything else to record (who deploys, release checklist, freeze windows)? | nothing; on a re-run the stored `## Notes` text is kept and an answer is appended below it | free text | `## Notes` |
 
 The skill writes the four factual prose sections from the answers, one or
 two sentences each, in the person's terms; a section with nothing to say
@@ -53,14 +54,16 @@ and the contract marks optional is left out, never written as `null`.
 ## The refusal rule
 
 Before keeping any answer, free text included, refuse it when it would put
-into the profile: a credential or a credential-looking string (a known
-token prefix such as `ghp_`, `github_pat_`, `sk-`, `AKIA`, `AIza`, `xox`,
-`eyJ`; a private key; a long mixed-case or hex string; a password); a value
+into the profile: a credential or a credential-looking string (what the
+credential test of the filter in [discovery.md](discovery.md) "Existing
+profile" withholds: the prefixes `gh[pousr]_`, `github_pat_`, `sk-`,
+`xox[abprs]-`, `AKIA`, `AIza`, `eyJ`; a private key; a long mixed-case or
+hex string; a password); a value
 from an environment file or a `NAME=value` pair; a URL with user
 information (`@` after `://`), a query string (`?`) or a fragment (`#`). A
-`?` anywhere in a front matter value fails the profile check the skills
-repository runs on its example (`.github/check.py`), which every written
-profile must also pass, so a question mark in a purpose is rephrased too.
+`?` anywhere in a front matter value fails the skills repository's profile
+check (`.github/check.py`, which CI runs on the example only; nothing checks
+the control repository), so a question mark in a purpose is rephrased too.
 Never repeat the refused value. Say this one line and ask the same
 question again:
 
@@ -103,12 +106,15 @@ once the control repository's pull request merges.
   factual prose sections, from the new answers. Unknown keys inside a
   `deploy`, `environments`, `services` or `data_stores` entry stay with the
   entry of the same `name`.
-- **Kept verbatim:** the `## Notes` text (a new answer to question 10 is
-  appended below it, replacing a lone "Nothing recorded."); front matter
-  keys the contract does not name, after the known keys of their mapping.
-  Step 3 copies both with one script that re-reads the stored file with
-  the Step 1 command (a shell variable does not outlive its call) and
-  writes the new file without printing it. The profile shown in Step 3
+- **Kept verbatim:** the `## Notes` text, never edited (a new answer to
+  question 10 is appended below it; a lone "Nothing recorded." gives way to
+  it); front matter keys the contract does not name, after the known keys
+  of their mapping. Step 3 copies both with one script that re-fetches the
+  raw file (the first line of the Step 1 command, `gh api …` or `git show`,
+  not the filter: a shell variable does not outlive its call), takes the
+  YAML of the unknown keys and the Notes text from it, and writes the new
+  file without printing it. When an existing branch is updated (below),
+  the stored file is the one on `origin/<branch>`. The profile shown in Step 3
   prints the Notes as "(kept verbatim, N lines)" and unknown keys as the
   filter prints them; an unknown key the filter printed as `<withheld>` is
   dropped, not copied, and named in the write list.
@@ -120,11 +126,16 @@ once the control repository's pull request merges.
   parse is never overwritten (Step 1 stops).
 - An existing `## Branches and delivery` section in `AGENTS.md` is replaced
   in place.
-- A branch `onboard/profile-<repo>` or `onboard/agents-<repo>` that already
-  exists on `origin` (an earlier, unmerged run) → ask: update that branch
-  and its open pull request (`git worktree add -B <branch> <tmp>
-  origin/<branch>`, apply the new files there, commit, push; no new pull
-  request), or use a new name with a `-2` suffix. Check with
-  `git ls-remote --heads origin <branch>` before every write, first run
-  included. A worktree left by an interrupted run is removed first
-  (`git worktree prune`; `git worktree remove --force <tmp>`).
+- Before every write, first run included, check each branch
+  `onboard/profile-<repo>` and `onboard/agents-<repo>`:
+  `git ls-remote --heads origin <branch>` and `gh pr list --repo
+  <owner>/<name> --head <branch> --state open`. On `origin` with an open
+  pull request → ask: update that branch and its pull request
+  (`git worktree add -B <branch> <tmp> origin/<branch>`, apply the new
+  files, commit, push; no new pull request), or use a `-2` suffix. On
+  `origin` without an open pull request (merged or closed) → use a `-2`
+  suffix. A local branch of that name with commits not on `origin` → show
+  `git log --oneline origin/<default>..<branch>` and ask before `-B`
+  resets it.
+- A worktree left by an interrupted run: `git worktree list` names its
+  path; `git worktree remove --force <path>`, then `git worktree prune`.

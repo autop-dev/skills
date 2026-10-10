@@ -95,13 +95,13 @@ Ask one question at a time, in the order of
 develop, model), CI/CD (system, gates), deploy targets (kind, trigger) and
 environments (branch, public URL), third-party services (confirm or correct
 each hint, add missing ones with a purpose), data stores, then "anything
-else to record". Each shows the proposed default (stored value on a
-re-run, else the evidence) and numbered choices where the evidence offers
-several. What the evidence settles beyond doubt (one branch, one CI system)
-is stated, not asked. The person's answer wins over the evidence. Refuse an
-answer that would put a credential, an environment value or a URL with user
-information, a query string or a fragment into the profile: say the
-one-line rule from questions.md, never repeat the value, ask again.
+else to record". Each shows the proposed default (stored value on a re-run,
+else the evidence) and numbered choices (the enumeration, or the values the
+evidence offers). What the evidence settles beyond doubt (one branch, one
+CI system) is stated, not asked. The person's answer wins over the
+evidence. Refuse an answer that would put a credential, an environment
+value or a URL with user information, a query string or a fragment in the
+profile: say the one-line rule of questions.md, never echo it, ask again.
 
 ## Step 3 — Write (ask once, then do)
 
@@ -121,8 +121,8 @@ one-line rule from questions.md, never repeat the value, ask again.
    and delivery`, commit `docs: link the project profile`, a pull request.
    Write nothing before an explicit yes.
 3. **Write** in a temporary worktree per repository (`git fetch origin`,
-   `git worktree add -B <branch> <tmp> origin/<default>`; a branch already
-   on `origin` → questions.md "Re-runs"), so no checkout's working tree
+   `git worktree add -B <branch> <tmp> origin/<default>`; an existing
+   branch or worktree → questions.md "Re-runs"), so no checkout's working tree
    changes: commit, `git push -u origin <branch>`, `gh pr create --repo
    <owner>/<name> --base <default> --head <branch>` under the person's
    login. A direct push is `git push origin HEAD:<default>`; rejected →
