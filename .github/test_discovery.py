@@ -60,6 +60,7 @@ GH_PROTECTION = inline('gh api repos/$REPO/branches/<default>/protection/require
 PRODUCT = fenced('r=$(git remote get-url origin')
 MODEL = fenced("awk '$1 == \"default\"")
 PACKAGE_JSON, COMPOSER_JSON = fenced("jq -r 'def safe:").splitlines()
+TERRAFORM = fenced("grep -hoE '^(resource|provider)")
 
 WORKFLOW = """\
 name: Deploy
@@ -400,6 +401,25 @@ volumes:
         self.assertNotIn('Ab1Cd2', result.stdout)
         self.assertNotIn('secret', result.stdout)
 
+    def test_terraform_types_are_masked(self):
+        """FR-013: a resource or provider label can hold a credential; only the masked type is printed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            main, other = Path(tmp) / 'main.tf', Path(tmp) / 'other.tf'
+            main.write_text('provider "google" {\n  project = "project-value-secret"\n}\n'
+                            'resource "google_cloud_run_v2_service" "api" {\n  name = "name-value-secret"\n}\n'
+                            'resource "ghp_resourceLabelCredential" "x" {}\n'
+                            'provider "0123456789abcdef0123456789abcdef" {}\n'
+                            'variable "token" {\n  default = "ghp_variableCredential"\n}\n')
+            other.write_text('resource "aws_instance" "web" {}\nresource "my_github_pat_label" "y" {}\n'
+                             'resource "google_cloud_run_v2_service" "worker" {}\n')
+            result = run(TERRAFORM.replace('<files>', f'{shlex.quote(str(main))} {shlex.quote(str(other))}'))
+            self.assertEqual((result.returncode, result.stderr), (0, ''))
+            self.assertEqual(sorted(result.stdout.splitlines()), [
+                'provider "<withheld>"', 'provider "google"', 'resource "<withheld>"', 'resource "aws_instance"',
+                'resource "google_cloud_run_v2_service"'])
+            for value in ('Credential', 'secret', '0123456789abcdef', 'github_pat'):
+                self.assertNotIn(value, result.stdout)
+
     def test_symlinked_and_forbidden_manifests_are_not_opened(self):
         """A tracked `compose.yml` that points at `.env`, and other paths the guard keeps every read from."""
         with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
@@ -675,6 +695,19 @@ class ProductRepositoryTest(unittest.TestCase):
             with self.subTest(origin=origin):
                 self.assertEqual(self.read(origin), ['origin <withheld>'])
 
+    def test_origin_must_be_on_github(self):
+        """FR-008: a remote on another host never names a GitHub repository, whatever its owner/name."""
+        for origin in ('https://GitHub.com/acme/api.git', 'ssh://git@github.com:22/acme/api.git',
+                       'https://evil.example@github.com/acme/api'):
+            with self.subTest(origin=origin):
+                self.assertEqual(self.read(origin), ['origin acme/api', 'viewed acme/api'])
+        for origin in ('https://gitlab.com/acme/api.git', 'git@bitbucket.org:acme/api.git',
+                       'ssh://git@git.example.com/acme/api.git', 'https://github.com.evil.example/acme/api',
+                       'https://github.com@evil.example/acme/api', 'git@github.com@evil.example:acme/api.git',
+                       'https://evil.example/github.com/acme/api', 'acme/api', 'file:///acme/api'):
+            with self.subTest(origin=origin):
+                self.assertEqual(self.read(origin), ['origin <withheld>'])
+
     @unittest.skipUnless(shutil.which('jq'), 'jq is not installed')
     def test_view_masks_the_default_branch(self):
         origin = 'https://github.com/acme/api.git?sig=query-secret'
@@ -747,6 +780,26 @@ class ControlRepositoryTest(unittest.TestCase):
                                f'candidate {self.ws}/repos/beta-autopilot <withheld>',
                                f'candidate {self.ws}/repos/delta-autopilot <withheld>',
                                f'candidate {self.ws}/repos/gamma-autopilot acme/gamma-autopilot'])
+        for value in ('Credential', 'secret', 'Ab1Cd2'):
+            self.assertNotIn(value, '\n'.join(out))
+
+    def test_remote_must_be_on_github(self):
+        """FR-008: a checkout whose origin is on another host never matches the named repository."""
+        (self.ws / 'AGENTS.md').write_text('Control repository: acme/control\n')
+        self.set_origin(self.ws / 'control', 'https://gitlab.com/acme/control.git')
+        git_repo(self.ws / 'repos/mirror', 'git@github.com.evil.example:acme/control.git')
+        self.assertEqual(self.candidates({'REPOS_DIR': str(self.ws / 'repos')}), ['named acme/control'])
+        (self.ws / 'AGENTS.md').unlink()
+        self.set_origin(self.ws / 'acme-autopilot', 'ssh://git@git.example.com/acme/acme-autopilot.git')
+        self.assertEqual(self.candidates(), [f'candidate {self.ws}/acme-autopilot <withheld>'])
+
+    def test_candidate_paths_are_masked(self):
+        """FR-013: a checkout's directory name can hold a credential; the path prints as `<withheld>`."""
+        for name in ('ghp_pathCredential-autopilot', 'Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9-autopilot', 'q=secret-autopilot'):
+            git_repo(self.ws / 'repos' / name, 'https://github.com/acme/acme-autopilot.git')
+        out = self.candidates({'REPOS_DIR': str(self.ws / 'repos')})
+        self.assertEqual(out, [f'candidate {self.ws}/acme-autopilot acme/acme-autopilot',
+                               'candidate <withheld> acme/acme-autopilot'])
         for value in ('Credential', 'secret', 'Ab1Cd2'):
             self.assertNotIn(value, '\n'.join(out))
 

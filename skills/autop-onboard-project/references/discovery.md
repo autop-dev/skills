@@ -102,19 +102,22 @@ Read the product repository (SKILL.md Step 1 item 1) with the command
 below; never print the remote URL or `gh repo view` as returned. It keeps
 only `<owner>/<name>` from `origin`, the user information, query string,
 fragment and `.git` dropped, and prints `origin <withheld>` instead when
-that is not a GitHub-style `owner/name` or holds a known token prefix or a
-long mixed-case or hex string (ask for the repository then). `gh repo view`
-prints the repository, `organization` and `fork` as `true`/`false`, and the
-default branch, masked like a branch name ("Branches"). A `<withheld>`
-default branch: ask, and leave `DEFAULT` empty.
+`origin` is not on the host `github.com` (HTTPS, `ssh://` or
+`git@github.com:`), or `<owner>/<name>` is not a GitHub-style `owner/name`
+or holds a known token prefix or a long mixed-case or hex string (ask for
+the repository then). `gh repo view` prints the repository, `organization`
+and `fork` as `true`/`false`, and the default branch, masked like a branch
+name ("Branches"). A `<withheld>` default branch: ask, and leave `DEFAULT`
+empty.
 
 ```sh
 r=$(git remote get-url origin 2>/dev/null | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
   for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
     if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
   return 0 }
-{ sub(/[?#].*/, ""); sub(/^[a-z+]+:\/\/[^\/]*\//, ""); sub(/^[^\/:]*:/, ""); sub(/\/+$/, ""); sub(/\.git$/, "") }
-NR == 1 && /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/ && !risky($0) { print }')
+{ sub(/[?#].*/, ""); h = match(tolower($0), /^([a-z+]+:\/\/([^\/]*@)?github\.com(:[0-9]*)?\/|([^\/:@]*@)?github\.com:)/)
+  if (h) $0 = substr($0, RLENGTH + 1); sub(/\/+$/, ""); sub(/\.git$/, "") }
+NR == 1 && h && /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/ && !risky($0) { print }')
 echo "origin ${r:-<withheld>}"
 [ -n "$r" ] && gh repo view "$r" --json nameWithOwner,isInOrganization,isFork,defaultBranchRef --jq 'def safe(p): if type == "string" and test(p) and (test("(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)") or any(scan("[A-Za-z0-9+/=_-]+"); length >= 24 and test("[0-9]") and test("[a-z]") and test("[A-Z]") or length >= 32 and test("^[0-9A-Fa-f]+$")) | not) then . else "<withheld>" end;
   "repo \(.nameWithOwner | safe("^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$"))", "organization \(.isInOrganization == true)", "fork \(.isFork == true)", "default \(.defaultBranchRef.name? // "" | safe("^[A-Za-z0-9_./-]+$"))"'
@@ -132,28 +135,38 @@ directory, its parent, or `$REPOS_DIR` whose `origin` is that repository
 instead. A checkout is never a candidate because it holds `.specify/`. The
 named repository and each remote keep only `<owner>/<name>`, the user
 information, query string, fragment and `.git` dropped, and print as
-`<withheld>` when that is not a GitHub-style `owner/name` or holds a known
-token prefix or a long mixed-case or hex string; a `<withheld>` name
-matches no checkout. One `candidate` line gives `AP=<path>` and
-`AP_REPO=<owner/name>`; zero, several or a `<withheld>` one mean ask.
+`<withheld>` when a remote is not on the host `github.com`, or that is not a
+GitHub-style `owner/name` or holds a known token prefix or a long mixed-case
+or hex string; a `<withheld>` name matches no checkout. A checkout path
+holding a character outside letters, digits, spaces and `_ . / @ + -`, a
+known token prefix or a long mixed-case or hex string prints as
+`<withheld>`. One `candidate` line gives `AP=<path>` and
+`AP_REPO=<owner/name>`; zero, several or one with a `<withheld>` path or
+name mean ask.
 
 ```sh
-name() { awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+name() { awk -v bare="$1" 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
   for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
     if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
   return 0 }
-{ sub(/[?#].*/, ""); sub(/^[a-z+]+:\/\/[^\/]*\//, ""); sub(/^[^\/:]*:/, ""); sub(/\/+$/, ""); sub(/\.git$/, "") }
-NR == 1 { print (/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/ && !risky($0) ? $0 : "<withheld>") }'; }
+{ sub(/[?#].*/, ""); h = match(tolower($0), /^([a-z+]+:\/\/([^\/]*@)?github\.com(:[0-9]*)?\/|([^\/:@]*@)?github\.com:)/)
+  if (h) $0 = substr($0, RLENGTH + 1); sub(/\/+$/, ""); sub(/\.git$/, "") }
+NR == 1 { print ((h || bare) && /^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/ && !risky($0) ? $0 : "<withheld>") }'; }
 want=$(for f in AGENTS.md README.md ../AGENTS.md ../README.md; do [ -f "$f" ] && [ ! -L "$f" ] && cat "$f"; done | grep -i 'control repo' |
-  sed -E 's#(https?://|git@)github\.com[:/]##g' | grep -oE '[A-Za-z0-9-]+/[A-Za-z0-9_.-]+' | name)
+  sed -E 's#(https?://|git@)github\.com[:/]##g' | grep -oE '[A-Za-z0-9-]+/[A-Za-z0-9_.-]+' | name bare)
 [ -n "$want" ] && echo "named $want"
 for d in "$PWD" "$PWD"/* "${PWD%/*}" "${PWD%/*}"/* ${REPOS_DIR:+"$REPOS_DIR"/*}; do
   [ -e "$d/.git" ] || continue
   r=$(git -C "$d" remote get-url origin 2>/dev/null | name)
   if [ -n "$want" ]; then [ "$r" != "<withheld>" ] && [ "$(echo "$r" | tr A-Z a-z)" = "$(echo "$want" | tr A-Z a-z)" ] || continue
   else case "${d##*/}" in *-autopilot) ;; *) continue ;; esac; fi
-  echo "candidate $d $r"
-done | sort -u
+  case $d in *[!A-Za-z0-9_./@+\ -]*) d='<withheld>' ;; esac
+  printf '%s\t%s\n' "$d" "$r"
+done | awk -F '\t' 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ print "candidate " (risky($1) ? "<withheld>" : $1) " " $2 }' | sort -u
 ```
 
 ## Existing profile
@@ -383,8 +396,18 @@ f != "" && l ~ /^-/ { each(t " " f " ", substr(l, 2)) }' <file>
 | `*.tf` | from the resource types: `google_cloud_run_*` → `cloud-run`, `google_compute_instance`, `aws_instance` → `compute-vm` |
 | `app.yaml`, `fly.toml`, `render.yaml`, `Procfile`, or a `Dockerfile` alone | `other`, named in the target (App Engine, Fly.io, Render, Heroku) |
 
-Read Terraform resource types only, never variables:
-`grep -hoE '^(resource|provider) "[a-z0-9_]+"' <files>`.
+Read Terraform resource and provider types only, never variables, with
+the command below; a type holding a known token prefix or a long hex string
+prints as `<withheld>`:
+
+```sh
+grep -hoE '^(resource|provider) "[a-z0-9_]+"' <files> | awk 'function risky(v,   s, r) { if (v ~ /(^|[^A-Za-z0-9])(gh[pousr]_|github_pat_|sk-|xox[abprs]-|AKIA|AIza|eyJ)/) return 1
+  for (s = v; match(s, /[A-Za-z0-9+\/=_-]+/); s = substr(s, RSTART + RLENGTH)) { r = substr(s, RSTART, RLENGTH)
+    if (length(r) >= 24 && r ~ /[0-9]/ && r ~ /[a-z]/ && r ~ /[A-Z]/ || length(r) >= 32 && r ~ /^[0-9A-Fa-f]+$/) return 1 }
+  return 0 }
+{ print $1 " " (risky($2) ? "\"<withheld>\"" : $2) }' | sort -u
+```
+
 If the only compose file holds just a database for local development, it is
 a data-store hint and not a deploy target. To find the trigger, look for the
 workflow that deploys, using
