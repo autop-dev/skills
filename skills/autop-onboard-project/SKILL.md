@@ -76,8 +76,8 @@ accepts, placed next to the product checkout, never inside it).
    merge in discovery.md "The evidence table"). Any other version, or front
    matter that does not parse as YAML, is unreadable: say so and stop after
    the table; the skill never overwrites it.
-   On a re-run Step 3 keeps the stored `## Notes` text and unknown keys,
-   refreshes `updated`, and replaces the `AGENTS.md` section in place.
+   Then check the `onboard/*` branches and their pull requests (questions.md
+   "Re-runs"); Step 3 keeps Notes and unknown keys, refreshes `updated`.
 4. **Evidence.** Follow [references/discovery.md](references/discovery.md):
    branches and `v*` tags with the model rule, CI files and gates, deploy
    manifests with kind and trigger, environments, package manifests to
@@ -125,10 +125,10 @@ profile: say the one-line rule of questions.md, never echo it, ask again.
    branch or worktree → questions.md "Re-runs"), so no checkout's working tree
    changes: commit, `git push -u origin <branch>`, `gh pr create --repo
    <owner>/<name> --base <default> --head <branch>` under the person's
-   login. A direct push is `git push origin HEAD:<default>`; rejected →
-   offer the branch and pull request. `gh pr create` refused → print
-   `https://github.com/<owner>/<name>/compare/<default>...<branch>`. Remove
-   the worktrees.
+   login. A direct push is `git push origin HEAD:<default>`. A rejected push
+   → say so, no link (direct push: offer the branch). `gh pr create` refused →
+   print `https://github.com/<owner>/<name>/compare/<default>...<branch>`.
+   Remove the worktrees.
 
 ## Report
 

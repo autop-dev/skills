@@ -37,7 +37,7 @@ Enter or "yes" keeps the default; a number or a name changes it.
 | 1 | Release branch: what production runs | the evidence table's proposal (the model rule in [discovery.md](discovery.md) "Branches") | the long-lived branches from `git ls-remote --heads` | `branches.release` |
 | 2 | Develop branch: where feature work integrates | the evidence table's proposal (same rule) | the long-lived branches | `branches.develop` |
 | 3 | Branching model, release-branch glob, tag glob | the model rule in [discovery.md](discovery.md) "Branches"; `"v*"` when `v*` tags exist | 1. trunk 2. git-flow 3. release-branches 4. other | `branches.model`, `branches.release_pattern` (only for release-branches, default `"release/*"`), `branches.tags` (only when releases are tagged) |
-| 4 | CI system and its files | the system whose files were found, else `none` | 1. github-actions 2. gitlab-ci 3. jenkins 4. cloud-build 5. circleci 6. other 7. none | `ci.system`, `ci.config` (the files found; the person may add or drop paths; left out for `none`) |
+| 4 | CI system and its files | the system whose files were found, else `none` | 1. github-actions 2. gitlab-ci 3. jenkins 4. cloud-build 5. circleci 6. other 7. none | `ci.system`, `ci.config` (the files found; the person may add or drop paths; a system other than `none` with no file found → ask for the paths, required; left out for `none`) |
 | 5 | Checks a pull request must pass | the job and required-check names from the evidence | the names, numbered; "all", numbers, or "none" | `ci.gates` (left out for none) |
 | 6 | Each deploy target: name, kind, config, trigger (one question per target, then "another target?") | the evidence row: kind from the manifest, trigger from the workflow | kind: 1. firebase-hosting 2. cloud-run 3. compute-vm 4. kubernetes 5. docker-compose 6. serverless 7. static-site 8. app-store 9. package-registry 10. other; trigger: 1. push-to-release 2. tag 3. manual 4. other | `deploy[]`: `name`, `kind`, `config`, `trigger`; "nothing is deployed" → `[]` |
 | 7 | Each environment: name, branch it follows, public URL (one per environment, then "another?") | names from workflow `environment:` keys; branch the release branch for `production`; URL none, never guessed | the long-lived branches for the branch | `environments[]`: `name`, `branch`, `url` (optional keys left out when unanswered) |
@@ -58,7 +58,8 @@ into the profile: a credential or a credential-looking string (what the
 credential test of the filter in [discovery.md](discovery.md) "Existing
 profile" withholds: the prefixes `gh[pousr]_`, `github_pat_`, `sk-`,
 `xox[abprs]-`, `AKIA`, `AIza`, `eyJ`; a private key; a long mixed-case or
-hex string; a password); a value
+hex string, tested per `/`-separated part so a file path passes; a
+password); a value
 from an environment file or a `NAME=value` pair; a URL with user
 information (`@` after `://`), a query string (`?`) or a fragment (`#`). A
 `?` anywhere in a front matter value fails the skills repository's profile
@@ -105,7 +106,8 @@ once the control repository's pull request merges.
 - **Rewritten:** the front matter keys this contract names and the four
   factual prose sections, from the new answers. Unknown keys inside a
   `deploy`, `environments`, `services` or `data_stores` entry stay with the
-  entry of the same `name`.
+  entry the person kept or corrected (renamed included); a dropped entry's
+  keys go with it, named in the write list.
 - **Kept verbatim:** the `## Notes` text, never edited (a new answer to
   question 10 is appended below it; a lone "Nothing recorded." gives way to
   it); front matter keys the contract does not name, after the known keys
@@ -113,11 +115,13 @@ once the control repository's pull request merges.
   raw file (the first line of the Step 1 command, `gh api …` or `git show`,
   not the filter: a shell variable does not outlive its call), takes the
   YAML of the unknown keys and the Notes text from it, and writes the new
-  file without printing it. When an existing branch is updated (below),
-  the stored file is the one on `origin/<branch>`. The profile shown in Step 3
-  prints the Notes as "(kept verbatim, N lines)" and unknown keys as the
-  filter prints them; an unknown key the filter printed as `<withheld>` is
-  dropped, not copied, and named in the write list.
+  file without printing it. When an open pull request's branch is updated
+  (below), the stored file is the one on `origin/<branch>` (`git show`
+  form), for the defaults as well as for Notes and unknown keys. The
+  profile shown in Step 3 prints the Notes as "(kept verbatim, N lines)"
+  and unknown keys as the filter prints them; an unknown key the filter
+  printed as `<withheld>` is dropped, not copied, and named in the write
+  list.
 - **`updated`** is set to today. A repository whose file would not change
   (the same `AGENTS.md` section; a profile identical but for `updated`) is
   left out of the write list and said so; nothing changes → nothing to
@@ -126,16 +130,19 @@ once the control repository's pull request merges.
   parse is never overwritten (Step 1 stops).
 - An existing `## Branches and delivery` section in `AGENTS.md` is replaced
   in place.
-- Before every write, first run included, check each branch
-  `onboard/profile-<repo>` and `onboard/agents-<repo>`:
+- After Step 1 and before the interview, first run included, check each
+  branch `onboard/profile-<repo>` and `onboard/agents-<repo>`:
   `git ls-remote --heads origin <branch>` and `gh pr list --repo
   <owner>/<name> --head <branch> --state open`. On `origin` with an open
-  pull request → ask: update that branch and its pull request
+  pull request → ask now: update that branch and its pull request
   (`git worktree add -B <branch> <tmp> origin/<branch>`, apply the new
-  files, commit, push; no new pull request), or use a `-2` suffix. On
-  `origin` without an open pull request (merged or closed) → use a `-2`
-  suffix. A local branch of that name with commits not on `origin` → show
-  `git log --oneline origin/<default>..<branch>` and ask before `-B`
-  resets it.
+  files, commit, push; no new pull request), or a new branch. On `origin`
+  without an open pull request (merged or closed), or a new branch chosen
+  → the first free name of `<branch>-2`, `<branch>-3`, …. The write list
+  then names the branch that will be used; nothing is asked after the yes.
+  A local branch of that name with commits not on its base (`origin/<branch>`
+  when it exists, else `origin/<default>`) → show
+  `git log --oneline <base>..<branch>` and ask, also before the interview,
+  before `-B` resets it.
 - A worktree left by an interrupted run: `git worktree list` names its
   path; `git worktree remove --force <path>`, then `git worktree prune`.
