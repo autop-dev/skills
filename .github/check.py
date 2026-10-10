@@ -46,7 +46,7 @@ for key in PROFILE_KEYS:
 values, seen = [('', profile)], set()
 while values:
     key, value = values.pop()
-    if isinstance(value, (dict, list)):
+    if isinstance(value, (dict, list, tuple, set, frozenset)):
         if id(value) in seen:  # YAML aliases can share or nest a container in itself
             continue
         seen.add(id(value))
@@ -54,7 +54,7 @@ while values:
         for k, v in value.items():
             path = f'{key}.{k}' if key else str(k)
             values.extend(((path, k), (path, v)))
-    elif isinstance(value, list):
+    elif isinstance(value, (list, tuple, set, frozenset)):  # !!omap/!!pairs load as tuples, !!set as a set
         values.extend((f'{key}[{i}]', v) for i, v in enumerate(value))
     elif isinstance(value, str) and (re.search(r'[A-Za-z][A-Za-z0-9+.-]*://\S*@', value) or '?' in value):
         errors.append(f'{rel}: {key}: URL with user info or query string')

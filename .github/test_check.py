@@ -28,6 +28,13 @@ class CheckTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f'{EXAMPLE}: ?: URL with user info or query string', result.stderr)
 
+    def test_rejects_question_mark_in_set_and_ordered_maps(self):
+        for extra in ('extra: !!set {"?": null}', 'extra: !!omap [x: "?"]', 'extra: !!pairs [x: "?"]'):
+            with self.subTest(extra=extra):
+                result = run_check(extra)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('URL with user info or query string', result.stderr)
+
     def test_recursive_alias_terminates(self):
         result = run_check('extra: &loop [*loop]')
         self.assertEqual(result.returncode, 0, result.stderr)
