@@ -18,10 +18,10 @@ human actions.
 | Piece | Where | Who does it |
 |---|---|---|
 | Sign-in and a workspace | https://app.autop.dev (GitHub OAuth) | person |
-| Three GitHub Apps installed on the **organisation** that owns the repos: *Autop ATC*, *Autop Coder*, *Autop Reviewer* | GitHub org settings, via the console's install links | person (org owner) |
+| Three GitHub Apps installed on the **organisation** that owns the repos, in this order: *Autop ATC*, *Autop Coder*, *Autop Reviewer* | GitHub org settings, via the install links on the console's Organisations page | person (org owner) |
 | A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub | person, or this skill with `gh` |
-| A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | this skill |
-| Every product repo and the control repo covered by all three App installations | GitHub | person |
+| A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | created by the console (or by the person from the console's prefilled link); this skill fills it |
+| Every product repo and the control repo covered by all three App installations | GitHub, via the console's per-App settings links for any repo an App lacks | person |
 | `AGENTS.md` in every product repo: how to build, test and lint, the code-review focus | repo | this skill |
 | Autop's labels in every repo (`autop`, `P0`–`P3`, `epic`, `human-task`, `needs-human`, `blocked-on-question`) | repo | `autop issue labels` |
 | A project in the console binding organisation + board + control repo + repos, with agent routes | console | person |
@@ -61,8 +61,12 @@ Report the table above with ✓ / ✗ per row before changing anything.
 
 Show the person the list of writes and get a yes.
 
-- **Control repo.** Create it only if the person confirms the name
-  (`gh repo create <ORG>/<name> --private`); otherwise use the existing one.
+- **Control repo.** Fill the existing one; do not create it. The console
+  creates `<slug>-autopilot` when the person creates the project (Step 3), or
+  offers a prefilled GitHub link for it. If Step 1 found none, skip this
+  bullet and the control repo's labels until it exists, then come back. Only
+  when the person says they prefer the manual route, offer
+  `gh repo create <ORG>/<name> --private` with the name they confirm.
   Add an `AGENTS.md` that names the organisation, the board URL
   (`https://github.com/orgs/<ORG>/projects/<N>`), the product repos with one
   line each on their role, the "Source of truth:" repo, and the architecture
@@ -86,12 +90,27 @@ Show the person the list of writes and get a yes.
 
 ## Step 3 — Hand over the console side
 
-Print the remaining person-only steps in order, each with its link:
+Print the remaining person-only steps in the console's order, each with its
+link:
 
-1. Sign in at https://app.autop.dev and install any missing App on `<ORG>`.
+1. Sign in at https://app.autop.dev and open **Organisations**. Install any
+   missing App on `<ORG>` from its link, in the order the page numbers them:
+   *Autop ATC*, *Autop Coder*, *Autop Reviewer*. Choose GitHub's repository
+   selection knowingly; both are supported. "All repositories" covers every
+   repo, including ones created later such as the control repo (the simple
+   path). "Only select repositories" covers only the repos chosen, so a
+   control repo created later must be added to each App (the strict path).
 2. Create the project: organisation, board, control repo, product repos.
-3. Check the agent routes (which profile implements, reviews, repairs) and
-   the merge policy.
+   For the control repo use **Create `<slug>-autopilot` for me**; when the
+   console offers only the prefilled GitHub link (the organisation has not
+   yet accepted Autop ATC's updated permissions), create it from that link.
+   Check the agent routes (which profile implements, reviews, repairs) and
+   the merge policy. If the control repo did not exist before, come back to
+   this skill once it does so it can be filled and labelled (Step 2).
+3. If the project starts paused ("waiting for App access to the control
+   repository"), add the control repo to each App from the settings links
+   the project page shows. The project activates by itself once all three
+   cover it; Refresh shows it, and there is no Resume to press.
 4. On the machine that will do the work: `curl -fsSL https://autop.dev/install.sh | sh`,
    the installer runs `autop runner setup`; enter the enrollment token only
    at its hidden prompt. The wizard configures and starts the runner, and ATC
