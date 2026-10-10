@@ -62,10 +62,10 @@ Report the table above with ✓ / ✗ per row before changing anything.
 Show the person the list of writes and get a yes.
 
 - **Control repo.** Fill the existing control repo found in Step 1; do not
-  create one. When none exists yet, the console creates it while the person
+  create one by default. When none exists yet, the console creates it while the person
   creates the project (Step 3), or the person creates it from the console's
-  prefilled link: hand over the console side first and fill the repository
-  once it exists. Only when the person prefers the manual route and says so,
+  prefilled link: hand over the console side first, then fill and label the
+  repository once it exists, after listing those writes and getting a yes. Only when the person prefers the manual route and says so,
   offer `gh repo create <ORG>/<name> --private` with the name they confirm;
   with "Only select repositories" they then add it to each App themselves.
   Add an `AGENTS.md` that names the organisation, the board URL
@@ -95,7 +95,7 @@ Print the remaining person-only steps in order, each with its link:
 
 1. Sign in at https://app.autop.dev and open **Organisations**. Install
    *Autop ATC*, *Autop Coder* and *Autop Reviewer* on `<ORG>` in that order,
-   from the page's numbered steps. GitHub asks which repositories each App
+   from the page's numbered steps, skipping any Step 1 found installed. GitHub asks which repositories each App
    may see; choose knowingly. **All repositories** is the simple path: it
    covers every repository, including ones created later such as the control
    repo. **Only select repositories** is the strict path: it covers only the
@@ -104,12 +104,12 @@ Print the remaining person-only steps in order, each with its link:
    to the settings of the App that lacks the repository.
 2. Create the project: organisation, board, control repo, product repos. For
    the control repo use **Create it for me** (the console creates
-   `<slug>-autopilot`), or the prefilled link to create it on GitHub when
+   `<slug>-autopilot`, `<slug>` being the project's slug), or the prefilled link to create it on GitHub when
    that action is not offered (the form says when accepting Autop ATC's
    updated permissions would enable it). Check the agent routes (which
    profile implements, reviews, repairs) and the merge policy. If the control
-   repo is new, come back so this skill fills it (Step 2's control repo
-   bullet).
+   repo is new, come back before step 4 so this skill fills and labels it
+   (Step 2's control repo and labels bullets).
 3. If the project starts paused ("waiting for App access to the control
    repository"), add the control repo to each App the project page lists,
    from its settings links, then Refresh. The project activates by itself once
