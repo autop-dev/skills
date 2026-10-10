@@ -18,7 +18,7 @@ human actions.
 | Piece | Where | Who does it |
 |---|---|---|
 | Sign-in and a workspace | https://app.autop.dev (GitHub OAuth) | person |
-| Three GitHub Apps installed on the **organisation** that owns the repos, in this order: *Autop ATC*, *Autop Coder*, *Autop Reviewer* | GitHub org settings, via the install links on the console's Organisations page | person (org owner) |
+| Three GitHub Apps installed on the **organisation** that owns the repos: *Autop ATC*, *Autop Coder*, *Autop Reviewer* (the console guides them in that order) | GitHub org settings, via the install links on the console's Organisations page | person (org owner) |
 | A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub | person, or this skill with `gh` |
 | A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | created by the console (or by the person from the console's prefilled link); this skill fills it |
 | Every product repo and the control repo covered by all three App installations | GitHub, via the console's per-App settings links for any repo an App lacks | person |
@@ -61,7 +61,7 @@ Report the table above with ✓ / ✗ per row before changing anything.
 
 Show the person the list of writes and get a yes.
 
-- **Control repo.** Fill the existing one; do not create it. The console
+- **Control repo.** Fill the existing one; do not create it by default. The console
   creates `<slug>-autopilot` when the person creates the project (Step 3), or
   offers a prefilled GitHub link for it. If Step 1 found none, skip this
   bullet and the control repo's labels until it exists, then come back. Only
@@ -82,7 +82,7 @@ Show the person the list of writes and get a yes.
   `AGENTS.md` keeps Claude Code and Codex on the same file. Commit on a
   branch and open a PR, unless the person asks for a direct push.
 - **Labels.** `autop issue labels <ORG>/<repo> ...` for every product repo
-  and the control repo.
+  and, once it exists, the control repo.
 - **Board.** If no board exists and the person agrees, create one:
   `gh project create --owner <ORG> --title "<name>"`, then add the missing
   `Status` options and the optional `Priority` field through the GitHub UI
@@ -98,15 +98,19 @@ link:
    *Autop ATC*, *Autop Coder*, *Autop Reviewer*. Choose GitHub's repository
    selection knowingly; both are supported. "All repositories" covers every
    repo, including ones created later such as the control repo (the simple
-   path). "Only select repositories" covers only the repos chosen, so a
-   control repo created later must be added to each App (the strict path).
+   path). "Only select repositories" covers only the repos chosen, so every
+   product repo must be selected in all three, and a control repo created
+   later must be added to each App that lacks it (the strict path).
 2. Create the project: organisation, board, control repo, product repos.
-   For the control repo use **Create `<slug>-autopilot` for me**; when the
-   console offers only the prefilled GitHub link (the organisation has not
-   yet accepted Autop ATC's updated permissions), create it from that link.
+   For the control repo use **Create `<slug>-autopilot` for me** (`<slug>`
+   is the project's slug). When the console offers only the prefilled GitHub
+   link, the organisation has not yet accepted Autop ATC's updated
+   permissions: either accept them from the settings link the console shows,
+   which turns on the offer, or create the repo from the prefilled link.
    Check the agent routes (which profile implements, reviews, repairs) and
    the merge policy. If the control repo did not exist before, come back to
-   this skill once it does so it can be filled and labelled (Step 2).
+   this skill as soon as it does, before filing any work, so it can be
+   filled and labelled (Step 2).
 3. If the project starts paused ("waiting for App access to the control
    repository"), add the control repo to each App from the settings links
    the project page shows. The project activates by itself once all three
