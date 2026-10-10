@@ -32,6 +32,8 @@ value as the default and add "(profile)". When the checkout disagrees, add
 
 Below the table, list every file you opened, by path. Then list the
 forbidden files you saw in the checkout, by name only, marked "not opened".
+To see them, use `ls -a` on the root and on each directory that holds a
+manifest; it prints names only.
 
 ## Branches
 
@@ -46,15 +48,15 @@ forbidden files you saw in the checkout, by name only, marked "not opened".
   propose `tags: "v*"`. Offline, use `git tag -l 'v*'`.
 - **Model rule**, first match wins:
   1. `develop` or `development` exists: `git-flow`. That branch is
-     `develop`. `release` is `main` or `master` when one exists, else the
-     default branch.
+     `develop`. `release` is `main`, else `master`, else the default
+     branch.
   2. `release/*` exists: `release-branches`, with
      `release_pattern: "release/*"`.
   3. `production` exists, or `main` and `master` both exist: `other`, with
      `production` or the non-default one of the pair proposed as `release`
      and the default as `develop`.
-  4. Otherwise, the default branch alone, or with only `staging` or
-     `hotfix/*`: `trunk`, and `release = develop = default`.
+  4. Otherwise (for example the default branch alone, or with `staging` or
+     `hotfix/*`): `trunk`, and `release = develop = default`.
 
 ## CI and deploy files
 
@@ -76,15 +78,17 @@ and
 If files from several CI systems are present, list them all and ask which
 one gates pull requests. Gates are the job names under `jobs:` of the
 workflows triggered by `pull_request` (not deploy, release or scheduled
-jobs); `gh api repos/$REPO/rules/branches/<default>` shows required checks
-when the login can read them. For another CI system, list its job or stage
+jobs); `gh api repos/$REPO/rules/branches/<default>` and
+`gh api repos/$REPO/branches/<default>/protection/required_status_checks`
+show required checks when the login can read them. For another CI system, list its job or stage
 names and ask for the gates and trigger. The commands below assume
 two-space YAML indentation; adjust the counts for other files. Read GitHub
 Actions jobs and environments with
-`sed -n '/^jobs:/,$p' <file> | grep -nE '^ {2}[A-Za-z0-9_-]+:[[:space:]]*$|^ {4}name:|^ {4}environment: *[A-Za-z0-9_-]* *$|^ {6}name:'`
-(an inline `environment: {…}` map is skipped, because it can hold a URL).
-Read triggers with
-`sed -n "/^[\"']\{0,1\}on[\"']\{0,1\}:/,/^[a-z]/p" <file>`.
+`awk '/^jobs:/{j=1; next} j && /^[^ #]/{j=0} j && (/^  [A-Za-z0-9_-]+: *$/ || /^    name:/ || /^    environment: *[A-Za-z0-9_-]* *$/){print NR": "$0; e=/environment: *$/; next} e && /^      name:/{print NR": "$0} {e=0}' <file>`
+(job keys, job names and environment names only; an inline
+`environment: {…}` map and every `with:` or `secrets:` value are skipped).
+Read triggers with `awk '/^.?on.?:/{p=1; print; next} /^[^ #]/{p=0} p' <file>`,
+which stops before the next top-level key.
 
 | Deploy manifest (any directory) | Proposed `kind` |
 |---|---|
@@ -140,7 +144,7 @@ for `composer.json` use `jq -r '(.require // {}), (.["require-dev"] // {}) | key
 `pubspec.yaml` and `*.csproj`, print only the table names they contain:
 
 ```sh
-grep -ohiwE 'stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algolia|launchdarkly|segment|datadog|dd-trace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?' <files> | sort -u
+grep -ohiwE 'stripe|sentry|firebase-admin|boto3|aws-sdk|twilio|sendgrid|resend|postmark|mailgun|openai|anthropic|googleapis|slack|algoliasearch|algolia|launchdarkly|segment|datadog|dd-trace|ddtrace|newrelic|pusher|ably|auth0|clerk|supabase|prisma|psycopg[a-z0-9-]*|pg|lib/pq|asyncpg|pgx|npgsql|mysql[a-z0-9-]*|pymysql|pymongo|mongo[a-z]*|motor|redis|sqlite3?' <files> | sort -u
 ```
 
 Match a package by its name, without version or extras:
@@ -162,13 +166,13 @@ prefix, and Go module paths or .NET packages that contain a row's name
 | `@slack/*` | Slack (messaging) |
 | `algoliasearch` | Algolia (search) |
 | `launchdarkly-*` | LaunchDarkly (feature flags) |
-| `segment`, `datadog`, `dd-trace`, `newrelic` | Segment (analytics), Datadog, New Relic (monitoring) |
+| `segment`, `datadog`, `dd-trace`, `ddtrace`, `newrelic` | Segment (analytics), Datadog, New Relic (monitoring) |
 | `pusher`, `ably` | Pusher, Ably (realtime) |
 | `auth0`, `@clerk/*`, `supabase`, `@supabase/*` | Auth0, Clerk (authentication), Supabase (backend) |
 
 | Driver package or compose image | Data store |
 |---|---|
-| `pg`, `psycopg*`, `asyncpg`, `pgx`, `Npgsql`; image `postgres` | PostgreSQL |
+| `pg`, `lib/pq`, `psycopg*`, `asyncpg`, `pgx`, `Npgsql`; image `postgres` | PostgreSQL |
 | `mysql2`, `mysqlclient`, `pymysql`, `mysql-connector-*`; image `mysql`, `mariadb` | MySQL, MariaDB |
 | `mongodb`, `mongo-driver`, `mongoose`, `pymongo`, `motor`; image `mongo` | MongoDB |
 | `redis`, `ioredis`; image `redis` | Redis |
@@ -188,12 +192,13 @@ sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}\([A-Za-z_][A-Za-z0-9_]
 
 - **Secret-looking**: a name that contains `KEY`, `SECRET`, `TOKEN`,
   `PASSWORD`, `PASSWD`, `DSN`, `CREDENTIAL`, `PRIVATE` or `AUTH`, or that
-  ends in `_URL`. Connection strings embed passwords. List these names
-  marked "secret-looking".
+  ends in `_URL`. Connection strings embed passwords. Also mark, stricter
+  than the spec, names containing `PASS` or `PWD` or ending in `_URI`. List
+  these names marked "secret-looking".
 - **Prefix to service**: `STRIPE_` → Stripe, `SENTRY_` → Sentry, `AWS_` →
   AWS, `GOOGLE_`/`GCP_` → Google Cloud, `FIREBASE_` → Firebase, `TWILIO_` →
   Twilio, `SENDGRID_` → SendGrid, `OPENAI_` → OpenAI, `ANTHROPIC_` →
-  Anthropic, `SLACK_` → Slack, `MONGO_` → MongoDB. `DATABASE_URL` → a SQL
+  Anthropic, `SLACK_` → Slack, `MONGO_`/`MONGODB_` → MongoDB. `DATABASE_URL` → a SQL
   data store (the driver tells which), `REDIS_URL` → Redis. Evidence reads
   `<NAME> (environment key name)`.
 

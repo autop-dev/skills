@@ -63,19 +63,20 @@ accepts, placed next to the product checkout, never inside it).
    offer to clone that exact repo if absent. No control repo → finish this
    step and stop after the table; the profile is never written to the product
    repository. Set `AP_REPO=<owner>/<actual-repo-name>` from the verified
-   `origin` (SSH and HTTPS remotes are both valid); never synthesize a repository name. `$AP`'s owner must be
-   `<org>`; otherwise ask again. When `AP_REPO` equals `REPO` (compare
-   owner/name, not remote URLs), the person is in the control repository:
-   ask which product repository to profile and where its checkout is, and
-   redo item 1 there.
+   `origin` (SSH and HTTPS remotes are both valid); never synthesize a
+   repository name. `$AP`'s owner must be `<org>` (case-insensitively);
+   otherwise ask again. When `AP_REPO` equals `REPO` (compare owner/name
+   case-insensitively, not remote URLs), the person is in the control
+   repository: ask which product repository to profile and where its
+   checkout is, and redo item 1 there.
 3. **Existing profile.** Read `profile/<repo>.md` from `$AP`'s default
    branch on GitHub (`gh api -H 'Accept: application/vnd.github.raw'
-   repos/$AP_REPO/contents/profile/<repo>.md`; the local checkout if
-   offline). Not found → no defaults, continue.
-   With `profile: 1` its values are the defaults, and the evidence is shown
-   next to them. Any other version, or front matter that does not parse, is
-   unreadable: say so and stop after the table; the skill never overwrites
-   it.
+   repos/$AP_REPO/contents/profile/<repo>.md`; offline,
+   `git -C "$AP" show origin/<default>:profile/<repo>.md`). Not found → no
+   defaults, continue. With `profile: 1` its values are the defaults, and
+   the evidence is shown next to them. Any other version, or front matter
+   that does not parse, is unreadable: say so and stop after the table; the
+   skill never overwrites it.
 4. **Evidence.** Follow [references/discovery.md](references/discovery.md):
    branches and `v*` tags with the model rule, CI files and gates, deploy
    manifests with kind and trigger, environments, package manifests to
