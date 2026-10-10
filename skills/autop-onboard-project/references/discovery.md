@@ -281,14 +281,29 @@ Take names from these sources:
 - the branches `staging` and `production`.
 
 Read compose services, images and the `Dockerfile`s they build with the
-command below (two-space indentation; adjust the counts for other files).
+command below. It follows the file's own indentation and reads only the
+service names under `services:`, each service's own `image:` and `build:`,
+and `dockerfile:` directly under a `build:` block; a key of the same name
+in `environment:`, `labels:`, `args:` or any other block is never read.
 Trailing comments are dropped. A value holding a URL, a space or `=`, and a
 `build:` or `dockerfile:` value holding `:`, `@` or `?` (a remote Git
 context can carry `user:token@`), prints as `<withheld>`; a registry host is
 replaced.
 
 ```sh
-grep -nE '^ {2}[A-Za-z0-9_.-]+:[[:space:]]*(#.*)?$|^ +(image|dockerfile):|^ +build: [^{]*$' <file> | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'
+awk '{ sub(/\r$/, "") }
+/^[[:space:]]*(#|$)/ { next }
+{ i = match($0, /[^ ]/) - 1; l = substr($0, i + 1) }
+i == 0 { s = (l ~ /^services:[[:space:]]*(#.*)?$/); si = -1; next }
+!s { next }
+si < 0 { si = i }
+i == si { if (l ~ /^[A-Za-z0-9_.-]+:[[:space:]]*(#.*)?$/) print NR ":" $0; fi = -1; b = 0; next }
+i < si { next }
+fi < 0 { fi = i }
+i == fi { b = (l ~ /^build:[[:space:]]*(#.*)?$/); bi = -1; if (l ~ /^image:|^build:[[:space:]]+[^{[:space:]#]/) print NR ":" $0; next }
+!b || i < fi { next }
+bi < 0 { bi = i }
+i == bi && l ~ /^dockerfile:/ { print NR ":" $0 }' <file> | sed -E 's/[[:space:]]+#.*$//; s#^([0-9]+: +[a-z]+:).*://.*#\1 <withheld>#; s#^([0-9]+: +(build|dockerfile):).*[:@?].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:)[[:space:]]*[^[:space:]]+[[:space:]]+[^[:space:]].*#\1 <withheld>#; s#^([0-9]+: +[a-z]+:).*=.*#\1 <withheld>#; s#(image: *)([^/ $]+[.:][^/ ]*|localhost)/#\1<registry>/#; s#(:-)[^/ }]+[.:][^/ }]*\}/#\1<registry>}/#'
 ```
 
 Read profile names (inline or as a list; comments dropped, a name outside
@@ -351,17 +366,41 @@ prefix, and Go module paths or .NET packages that contain a row's name
 | `redis`, `ioredis`; image `redis` | Redis |
 | `sqlite3` | SQLite |
 | image `elasticsearch`, `rabbitmq` | Elasticsearch, RabbitMQ |
-| `@prisma/*` | `git grep -nE '^[[:space:]]*provider[[:space:]]*=' -- '*.prisma'` |
+| `@prisma/*` | the `provider` names of the tracked `*.prisma` schemas, read with the command below |
+
+For Prisma, list the schemas with `git ls-files -- '*.prisma'` and print
+the provider names only. The rest of the line, a trailing comment included,
+is never printed, and a provider outside Prisma's own names prints as
+`<withheld>`:
+
+```sh
+git grep -hE '^[[:space:]]*provider[[:space:]]*=' -- '*.prisma' | sed -E 's/^[[:space:]]*provider[[:space:]]*=[[:space:]]*"(postgresql|postgres|mysql|sqlite|sqlserver|mongodb|cockroachdb|prisma-client-js|prisma-client)".*/provider \1/; s/^[[:space:]]*provider[[:space:]]*=.*/provider <withheld>/'
+```
 
 ## Environment key names
 
 Open only tracked example files; a name that starts with `secrets` or
 `credentials` stays forbidden. Find them with
 `git ls-files -- '*.env.example' '*.env.sample' '*.env.template' '*.env.dist'`.
-For each one, print key names only, never a value:
+For each one, print key names only, never a value. The command below
+opens the file only when it is a regular file, not a symlink, in a
+directory inside the checkout (a tracked `.env.example` can point at
+`.env`); otherwise it prints one `skipped` line with the name. A value that
+opens a quote (`"`, `'` or a backtick) and does not close it on the same
+line runs on until the closing quote, and none of its lines is read as a
+key:
 
 ```sh
-sed -n 's/^[[:space:]]*\(export[[:space:]]\{1,\}\)\{0,1\}\([A-Za-z_][A-Za-z0-9_]*\)[[:space:]]*=.*/\2/p' <file>
+f=<file>; d=$(CDPATH= cd -- "$(dirname -- "$f")" 2>/dev/null && pwd -P)
+case "$d/" in "$(pwd -P)/"*) ;; *) d= ;; esac
+if [ -z "$d" ] || [ -L "$f" ] || [ ! -f "$f" ]; then echo "skipped $f: not a regular file in the checkout"
+else awk 'function closes(v, c) { if (c == "\"") gsub(/\\./, "", v); return index(v, c) > 0 }
+{ sub(/\r$/, "") }
+q != "" { if (closes($0, q)) q = ""; next }
+match($0, /^[[:space:]]*(export[[:space:]]+)?[A-Za-z_][A-Za-z0-9_]*[[:space:]]*=/) {
+  k = substr($0, 1, RLENGTH - 1); sub(/^[[:space:]]*(export[[:space:]]+)?/, "", k); sub(/[[:space:]]+$/, "", k); print k
+  v = substr($0, RLENGTH + 1); sub(/^[[:space:]]+/, "", v); c = substr(v, 1, 1)
+  if ((c == "\"" || c == sprintf("%c", 39) || c == "`") && !closes(substr(v, 2), c)) q = c }' "$f"; fi
 ```
 
 - **Secret-looking**: a name that contains `KEY`, `SECRET`, `TOKEN`,

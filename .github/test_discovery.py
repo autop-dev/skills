@@ -40,7 +40,7 @@ def on_file(command, text, name='file.yml'):
 
 JOBS = fenced("awk 'function clean(v,", 'jobs:')
 TRIGGERS = fenced("awk 'function clean(v,", 'function each(')
-COMPOSE = fenced("grep -nE '^ {2}")
+COMPOSE = fenced("awk '{ sub(/\\r$/, \"\") }", 'services:')
 COMPOSE_PROFILES = fenced("awk 'function out(v)")
 PROFILE = fenced('p=$(gh api ')
 PROFILE_OFFLINE = inline('p=$(git -C "$AP" show')
@@ -48,7 +48,8 @@ CONTROL = fenced('want=$(')
 MERGE = fenced("printf '%s\\n' \"$defaults\"")
 FIREBASE = inline("jq -r 'def safe:")
 ENV_FILES = inline("git ls-files -- '*.env.example'")
-ENV_NAMES = fenced("sed -n 's/^[[:space:]]*")
+ENV_NAMES = fenced('f=<file>;')
+PRISMA = fenced("git grep -hE '^[[:space:]]*provider")
 
 WORKFLOW = """\
 name: Deploy
@@ -167,6 +168,37 @@ services:
             '6:    build: ./worker', '7:  remote:', '8:    build: <withheld>', '9:  db:',
             '10:    image: postgres:17@sha256:abc', '13:  cache:', '14:    image: redis:7', '15:  odd:',
             '16:    image: <withheld>', '17:    build: ./odd'])
+        self.assertNotIn('secret', result.stdout)
+
+    def test_compose_reads_service_fields_only(self):
+        result = on_file(COMPOSE, """\
+x-common: &common
+    image: anchor-image-secret
+services:
+    app:
+        build:
+            context: .
+            dockerfile: docker/App.Dockerfile
+            args:
+                dockerfile: args-dockerfile-secret
+        environment:
+            image: env-image-secret
+            build: env-build-secret
+            dockerfile: env-dockerfile-secret
+        labels:
+            image: label-image-secret
+    worker:
+        environment:
+          - image=list-image-secret
+        image: worker:1
+volumes:
+    data:
+        image: volume-image-secret
+""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [
+            '4:    app:', '7:            dockerfile: docker/App.Dockerfile', '16:    worker:',
+            '19:        image: worker:1'])
         self.assertNotIn('secret', result.stdout)
 
     def test_compose_profile_names_only(self):
@@ -352,6 +384,21 @@ class ControlRepositoryTest(unittest.TestCase):
             self.assertEqual(run('git status --porcelain', cwd=path).stdout, before)
 
 
+class PrismaTest(unittest.TestCase):
+    def test_provider_names_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            git_repo(Path(tmp) / 'app', 'https://github.com/acme/app.git', commit={'prisma/schema.prisma': (
+                'generator client {\n  provider = "prisma-client-js" // TOKEN=generator-comment-secret\n}\n'
+                'datasource db {\n  provider = "postgresql" // DATABASE_URL=postgres://u:comment-pw-secret@db/app\n'
+                '  url      = env("DATABASE_URL")\n}\n'
+                'datasource other {\n  provider = "sk-provider-secret"\n}\n')})
+            result = run(PRISMA, cwd=Path(tmp) / 'app')
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout.splitlines(),
+                             ['provider prisma-client-js', 'provider postgresql', 'provider <withheld>'])
+            self.assertNotIn('secret', result.stdout)
+
+
 class EnvironmentKeyNamesTest(unittest.TestCase):
     """US2 scenario 5: a checkout with `.env.example` and `.env`."""
 
@@ -389,6 +436,38 @@ class EnvironmentKeyNamesTest(unittest.TestCase):
                 path.chmod(0o600)
             self.assertEqual(run('git status --porcelain', cwd=tmp).stdout, status)
             self.assertEqual((Path(tmp) / '.env').read_text(), 'STRIPE_SECRET_KEY=must-never-appear\n')
+
+    def test_multiline_quoted_values_are_not_keys(self):
+        result = on_file(ENV_NAMES.replace('f=<file>;', 'cd "$(dirname <file>)" && f=<file>;'), (
+            'PRIVATE_KEY="-----BEGIN KEY-----\nabc123TOKEN=\n  ESCAPED=\\" still-inside\n-----END KEY-----"\n'
+            "SINGLE='first\nSINGLEVALUE=line\n'\n"
+            'TICK=`one\nTICKVALUE=two`\n'
+            'INLINE="closed" # LATER="open\n'
+            'AFTER=1\n'), '.env.example')
+        self.assertEqual((result.returncode, result.stderr), (0, ''))
+        self.assertEqual(result.stdout.splitlines(), ['PRIVATE_KEY', 'SINGLE', 'TICK', 'INLINE', 'AFTER'])
+
+    def test_symlinked_example_files_are_not_opened(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            git = ['git', '-c', 'user.name=t', '-c', 'user.email=t@example.com', '-C', tmp]
+            subprocess.run(git + ['init', '-q'], check=True)
+            (Path(tmp) / '.env').write_text('STRIPE_SECRET_KEY=must-never-appear\n')
+            (Path(tmp) / '.env.example').symlink_to('.env')
+            (Path(tmp) / 'deploy').mkdir()
+            (Path(tmp) / 'deploy/.env.sample').symlink_to('../.env')
+            (Path(outside) / '.env.dist').write_text('OUTSIDE_TOKEN=must-never-appear\n')
+            subprocess.run(git + ['add', '-f', '.env.example', 'deploy/.env.sample'], check=True)
+            subprocess.run(git + ['commit', '-qm', 'fixture'], check=True)
+            (Path(tmp) / 'linked').symlink_to(outside)
+            (Path(tmp) / '.env').chmod(0)  # any read of the forbidden file now fails loudly on stderr
+
+            listed = run(ENV_FILES, cwd=tmp)
+            self.assertEqual(listed.stdout.splitlines(), ['.env.example', 'deploy/.env.sample'])
+            for file in listed.stdout.splitlines() + ['linked/.env.dist']:
+                result = run(ENV_NAMES.replace('<file>', shlex.quote(file)), cwd=tmp)
+                self.assertEqual((result.returncode, result.stderr), (0, ''))
+                self.assertEqual(result.stdout, f'skipped {file}: not a regular file in the checkout\n')
+            (Path(tmp) / '.env').chmod(0o600)
 
 
 if __name__ == '__main__':
