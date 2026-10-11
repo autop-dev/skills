@@ -75,8 +75,7 @@ try:
 except (OSError, ValueError, KeyError, TypeError, AssertionError):
     errors.append(f'{SCAFFOLD}/manifest.json: missing or invalid manifest (version 1, source, files)')
     listed = {}
-present = {p.relative_to(scaffold).as_posix() for p in scaffold.rglob('*')
-           if (p.is_file() or p.is_symlink()) and '__pycache__' not in p.parts and p.name != '.DS_Store'}
+present = {p.relative_to(scaffold).as_posix() for p in scaffold.rglob('*') if p.is_file() or p.is_symlink()}
 present -= {'manifest.json'}
 for item in sorted(present - listed.keys()):
     errors.append(f'{SCAFFOLD}/{item}: not listed in manifest')

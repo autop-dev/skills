@@ -84,6 +84,27 @@ class ScaffoldTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f'{SCAFFOLD}/specs/extra.md: not listed in manifest', result.stderr)
 
+    def test_unlisted_os_and_cache_files_are_not_exempt(self):
+        def edit(scaffold):
+            (scaffold / '.DS_Store').write_bytes(b'\0')
+            (scaffold / '.specify/scripts/bash/__pycache__').mkdir()
+            (scaffold / '.specify/scripts/bash/__pycache__/x.pyc').write_bytes(b'\0')
+        result = run_check(edit=edit)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f'{SCAFFOLD}/.DS_Store: not listed in manifest', result.stderr)
+        self.assertIn(f'{SCAFFOLD}/.specify/scripts/bash/__pycache__/x.pyc: not listed in manifest', result.stderr)
+
+    def test_readme_describes_the_scaffold(self):
+        readme = (root / 'README.md').read_text()
+        _, sep, section = readme.partition('\n## Control repository scaffold\n')
+        self.assertTrue(sep, 'README.md has no "Control repository scaffold" section')
+        section = ' '.join(section.split('\n## ')[0].split())
+        self.assertIn(f'`{SCAFFOLD}/`', section)
+        self.assertIn('"Set up" chat writes into a customer\'s control repository', section)
+        self.assertIn('`manifest.json` lists every other file', section)
+        self.assertIn('`sha256`', section)
+        self.assertIn('Change a file and its manifest entry in the same commit', section)
+
     def test_listed_file_absent_fails_naming_it(self):
         result = run_check(edit=lambda s: (s / 'specs/README.md').unlink())
         self.assertNotEqual(result.returncode, 0)
