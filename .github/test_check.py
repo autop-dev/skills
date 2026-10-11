@@ -98,14 +98,22 @@ class ScaffoldTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn(f'{SCAFFOLD}/AGENTS.md.tmpl: unknown placeholder {{{{owner}}}}', result.stderr)
 
-    def test_unterminated_placeholder_fails(self):
-        def edit(scaffold):
-            path = scaffold / '.specify/memory/constitution.md.tmpl'
-            path.write_text(path.read_text() + 'Owner: {{org\n')
-            rehash(scaffold, '.specify/memory/constitution.md.tmpl')
-        result = run_check(edit=edit)
+    def test_unterminated_or_stray_placeholder_fails(self):
+        rel = '.specify/memory/constitution.md.tmpl'
+        for extra in ('Owner: {{org\n', 'Owner: {{{org}}}\n', 'Owner: org}}\n'):
+            def edit(scaffold, extra=extra):
+                path = scaffold / rel
+                path.write_text(path.read_text() + extra)
+                rehash(scaffold, rel)
+            with self.subTest(extra=extra):
+                result = run_check(edit=edit)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(f'{SCAFFOLD}/{rel}: unterminated, nested or stray placeholder braces', result.stderr)
+
+    def test_mode_must_match_tmpl_suffix(self):
+        result = run_check(edit=lambda s: rehash(s, 'AGENTS.md.tmpl', mode='copy'))
         self.assertNotEqual(result.returncode, 0)
-        self.assertIn(f'{SCAFFOLD}/.specify/memory/constitution.md.tmpl: unterminated', result.stderr)
+        self.assertIn(f'{SCAFFOLD}/AGENTS.md.tmpl: manifest entry needs sha256 and mode template', result.stderr)
 
     def test_invalid_or_missing_manifest_fails(self):
         for edit in (lambda s: (s / 'manifest.json').unlink(),

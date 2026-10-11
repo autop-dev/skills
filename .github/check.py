@@ -65,6 +65,7 @@ while values:
 # the manifest must list exactly the files present, with current hashes and only the documented placeholders.
 SCAFFOLD = 'templates/control-repo'
 PLACEHOLDERS = {'org', 'board_url', 'control_repo', 'repos', 'source_of_truth', 'invariants', 'review_focus', 'date'}
+PLACEHOLDER = re.compile(r'\{\{([^{}\n]*)\}\}')
 scaffold = root / SCAFFOLD
 try:
     manifest = json.loads((scaffold / 'manifest.json').read_text())
@@ -75,24 +76,26 @@ except (OSError, ValueError, KeyError, TypeError, AssertionError):
     errors.append(f'{SCAFFOLD}/manifest.json: missing or invalid manifest (version 1, source, files)')
     listed = {}
 present = {p.relative_to(scaffold).as_posix() for p in scaffold.rglob('*')
-           if (p.is_file() or p.is_symlink()) and '__pycache__' not in p.parts} - {'manifest.json'}
+           if (p.is_file() or p.is_symlink()) and '__pycache__' not in p.parts and p.name != '.DS_Store'}
+present -= {'manifest.json'}
 for item in sorted(present - listed.keys()):
     errors.append(f'{SCAFFOLD}/{item}: not listed in manifest')
 for item, entry in sorted(listed.items()):
     path = scaffold / item
-    if not isinstance(entry, dict) or entry.get('mode') not in ('copy', 'template'):
-        errors.append(f'{SCAFFOLD}/{item}: manifest entry needs sha256 and mode copy or template')
+    if not isinstance(entry, dict) or entry.get('mode') != ('template' if item.endswith('.tmpl') else 'copy'):
+        errors.append(f'{SCAFFOLD}/{item}: manifest entry needs sha256 and mode template for .tmpl files, else copy')
     elif item not in present or path.is_symlink():  # listed paths outside the tree are never read
         errors.append(f'{SCAFFOLD}/{item}: listed in manifest but absent or a symlink')
     elif hashlib.sha256(path.read_bytes()).hexdigest() != entry.get('sha256'):
         errors.append(f'{SCAFFOLD}/{item}: sha256 does not match manifest')
     elif entry['mode'] == 'template':
         text = path.read_text(errors='replace')
-        names = re.findall(r'\{\{([^{}\n]*)\}\}', text)
+        names = PLACEHOLDER.findall(text)
         for name in sorted(set(names) - PLACEHOLDERS):
             errors.append(f'{SCAFFOLD}/{item}: unknown placeholder {{{{{name}}}}}')
-        if text.count('{{') != len(names):
-            errors.append(f'{SCAFFOLD}/{item}: unterminated or nested {{{{ placeholder')
+        rest = PLACEHOLDER.sub('', text)
+        if '{{' in rest or '}}' in rest or re.search(r'\{\{\{|\}\}\}', text):
+            errors.append(f'{SCAFFOLD}/{item}: unterminated, nested or stray placeholder braces')
 for path in files:
     content = path.read_bytes().decode('utf-8', errors='replace')
     if any(re.search(pattern, content) for pattern in patterns):
