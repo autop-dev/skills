@@ -53,9 +53,10 @@ by `autop-add-issue` and `autop-status`; `gh` with the `project` scope
 ## Filing work from the console
 
 Without a CLI or coding agent, or when several people are discussing the
-work, open the project page at [app.autop.dev](https://app.autop.dev) and use
-**Plan work**. The chat follows the same rules as `autop-add-issue` and files
-the same issues through Autop's plane; nothing needs installing.
+work, open the project's page in the console at
+[app.autop.dev](https://app.autop.dev) and use **Plan work**. The chat follows
+the same rules as `autop-add-issue` and files the same issues through Autop's
+plane; nothing needs installing.
 
 ## Layout
 

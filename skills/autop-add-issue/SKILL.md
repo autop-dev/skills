@@ -14,11 +14,11 @@ with the `autop` command). Spec pushes and integration refs use Git and `gh`
 under the person's own login.
 
 The Autop console offers the same workflow as a chat: **Plan work** on the
-project page at `https://app.autop.dev`. It follows the same rules as this
-skill and files the same issues, through the plane instead of the person's
-`gh` login. Prefer the chat when there is no CLI or coding agent on the machine,
-or when several people are discussing the work; prefer this skill when a
-checkout is at hand or an existing spec is to be amended.
+project's page in the console at `https://app.autop.dev`. It follows the same
+rules as this skill and files the same issues, through Autop's plane instead
+of the person's `gh` login. Prefer the chat when there is no CLI or coding
+agent on the machine, or when several people are discussing the work; prefer
+this skill when a checkout is at hand or an existing spec is to be amended.
 
 Do the steps in order. Confirm spec-kit initialization and spec publication
 before the writes in Step 3. Confirm the assembled issue plan in Step 4 before
@@ -355,8 +355,9 @@ order (blockers first); `P0` starts immediately. Nothing else to do.
 - Every issue filed by an agent carries the `autop` label (`autop issue add`
   adds it); do not remove it.
 - Never print, store or pass a token; `gh` holds the login.
-- **Keep aligned.** The console chat's prompt restates this skill's rules. A
-  change to the survey, the sizing gate, the structure rules or the
-  specificity contract here must change the runner's authoring prompt
-  (`runner/autop_runner/executor/authoring_prompt.py`) in the same release,
-  and the reverse.
+- **Keep aligned** (for maintainers of this skill, not a filing step). The
+  console chat's prompt restates this skill's rules. A change to the survey,
+  the sizing gate, the structure rules or the specificity contract here must
+  change the runner's authoring prompt
+  (`runner/autop_runner/executor/authoring_prompt.py` in `autop-dev/runner`)
+  in the same release, and the reverse.
