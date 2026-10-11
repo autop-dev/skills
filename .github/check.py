@@ -1,5 +1,8 @@
-"""Validate skill metadata and the profile example, and reject recognizable credential formats."""
+"""Validate skill metadata, the profile example and the control-repository scaffold manifest, and reject
+recognizable credential formats."""
 from pathlib import Path
+import hashlib
+import json
 import re
 import yaml
 
@@ -58,10 +61,43 @@ while values:
         values.extend((f'{key}[{i}]', v) for i, v in enumerate(value))
     elif isinstance(value, str) and (re.search(r'[A-Za-z][A-Za-z0-9+.-]*://\S*@', value) or '?' in value):
         errors.append(f'{rel}: {key}: URL with user info or query string')
+# The plane copies templates/control-repo/ into customers' control repositories after checking each sha256, so
+# the manifest must list exactly the files present, with current hashes and only the documented placeholders.
+SCAFFOLD = 'templates/control-repo'
+PLACEHOLDERS = {'org', 'board_url', 'control_repo', 'repos', 'source_of_truth', 'invariants', 'review_focus', 'date'}
+scaffold = root / SCAFFOLD
+try:
+    manifest = json.loads((scaffold / 'manifest.json').read_text())
+    listed = manifest['files']
+    assert manifest['version'] == 1 and manifest['source']['repo'] == 'autop-dev/control' and isinstance(listed, dict)
+    assert re.fullmatch(r'[0-9a-f]{40}', manifest['source']['commit'])
+except (OSError, ValueError, KeyError, TypeError, AssertionError):
+    errors.append(f'{SCAFFOLD}/manifest.json: missing or invalid manifest (version 1, source, files)')
+    listed = {}
+present = {p.relative_to(scaffold).as_posix() for p in scaffold.rglob('*')
+           if (p.is_file() or p.is_symlink()) and '__pycache__' not in p.parts} - {'manifest.json'}
+for item in sorted(present - listed.keys()):
+    errors.append(f'{SCAFFOLD}/{item}: not listed in manifest')
+for item, entry in sorted(listed.items()):
+    path = scaffold / item
+    if not isinstance(entry, dict) or entry.get('mode') not in ('copy', 'template'):
+        errors.append(f'{SCAFFOLD}/{item}: manifest entry needs sha256 and mode copy or template')
+    elif item not in present or path.is_symlink():  # listed paths outside the tree are never read
+        errors.append(f'{SCAFFOLD}/{item}: listed in manifest but absent or a symlink')
+    elif hashlib.sha256(path.read_bytes()).hexdigest() != entry.get('sha256'):
+        errors.append(f'{SCAFFOLD}/{item}: sha256 does not match manifest')
+    elif entry['mode'] == 'template':
+        text = path.read_text(errors='replace')
+        names = re.findall(r'\{\{([^{}\n]*)\}\}', text)
+        for name in sorted(set(names) - PLACEHOLDERS):
+            errors.append(f'{SCAFFOLD}/{item}: unknown placeholder {{{{{name}}}}}')
+        if text.count('{{') != len(names):
+            errors.append(f'{SCAFFOLD}/{item}: unterminated or nested {{{{ placeholder')
 for path in files:
     content = path.read_bytes().decode('utf-8', errors='replace')
     if any(re.search(pattern, content) for pattern in patterns):
         errors.append(f'{path.relative_to(root)}: token-looking content (value withheld)')
 if errors:
     raise SystemExit('\n'.join(errors))
-print(f'Checked {len(skills)} skills, {rel} and {len(files)} files: metadata, profile example and token scan passed')
+print(f'Checked {len(skills)} skills, {rel}, {len(listed)} scaffold files and {len(files)} files: '
+      'metadata, profile example, scaffold manifest and token scan passed')
