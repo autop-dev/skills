@@ -59,6 +59,41 @@ ready, check status, review decision, and whether it targets the default
 branch or an `epic/…` integration branch. For an epic
 (`autop issue subs <ORG>/<repo>#<N>`), list its sub-issues and their states.
 
+**Audit issues.** The project audit (a read-only review of the project's
+repositories) files each finding as an issue labelled `audit`:
+
+```bash
+gh issue list --repo <ORG>/<repo> --label audit --state open --json number,title,labels,url
+```
+
+The title carries the severity, `Audit <severity>: <title>`, at one of four
+levels:
+
+- **S1 critical**: an exposed credential or private key, an authentication bypass, unauthenticated data exposure.
+- **S2 high**: credential handling that leaks under a common failure, a missing signature, CSRF or origin check, a dependency with a known critical advisory, CI running untrusted code with write tokens.
+- **S3 medium**: missing branch protection or required checks, unpinned dependencies, weak session settings, verbose errors, over-broad tokens.
+- **S4 low**: hygiene.
+
+The body names one of six categories: `secrets-and-credentials`,
+`dependencies-and-supply-chain`, `ci-cd-and-branch-protection`,
+`authentication-and-sessions`, `data-exposure-and-logging`,
+`infrastructure-configuration`. The first, fourth and fifth add the
+`security` label. The priority label follows the severity: S1 → `P1`, S2 →
+`P2`, S3 and S4 → `P3` (never `P0`). An S1 issue also carries `needs-human`
+and waits for a person to confirm the finding before Autop changes anything;
+S2 and below carry `autop` and are worked like any other issue. Only
+findings at or above the project's floor (S2 unless the project sets
+`audit.floor`) get their own issue; an S1 or S2 finding in a public
+repository is filed in the control repository with the repository name in
+its title. One summary issue per audit run, `Audit summary <date>` in the
+control repository and labelled `audit` only (so Autop never works it),
+gives the counts per severity and lists the rest: the issues filed, the
+findings below the floor, and any withheld because the control repository is
+public. The report itself is committed to the control repository under
+`audits/<date>/` (`audits/<YYYY-MM-DD>/<project slug>-<job id prefix>.md`)
+when that repository is private, and is shown on the audit job's page in the
+console.
+
 ## Step 4 — This machine's runner
 
 ```bash
@@ -78,6 +113,10 @@ console (Runners page); say so rather than guessing.
 Lead with the direct answer ("#42 is still in Todo because its blocker #41 is open"), then the full picture, then
 what a person must do, with the exact command or console page:
 
+- "What did the audit find?": open the latest `Audit summary <date>` issue
+  in the control repository, give its counts per severity, list the filed
+  `audit` issues with their state, name each S1 waiting on `needs-human`,
+  and point at the report under `audits/<date>/` or the job in the console.
 - A missing label: `gh issue edit <N> --repo <ORG>/<repo> --add-label P2`.
 - A question from the bot: answer in the issue, then remove
   `blocked-on-question`.
