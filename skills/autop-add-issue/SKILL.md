@@ -20,8 +20,9 @@ creating issues and integration refs in Step 5.
 ## What Autop needs from an issue (why each step exists)
 
 - A **card on the project's board** (a Projects v2 board owned by the
-  project's GitHub organisation) with **Status = `Todo`**. There is no "Ready"
-  column; Autop does not add issues to the board by itself.
+  project's GitHub organisation) with **Status = `Todo`**. Autop adds an
+  issue carrying the `autop` label to the board as Todo itself; `autop issue
+  add` still adds the card immediately so the sweep sees it at once.
 - A **priority label** `P0`–`P3`. The board's Priority field is cosmetic; an
   issue without a label is picked last and its comments are ignored. `P0`
   starts immediately from the webhook — use it sparingly.
@@ -70,6 +71,11 @@ creating issues and integration refs in Step 5.
    confirm the list with the user once. The repos must be the ones the Autop
    project covers (console → project → repositories). **Source of truth:**
    the "Source of truth:" line in `$AP/AGENTS.md`, else ask.
+6. **Profiles.** For every in-scope repo read `$AP/profile/<repo>.md` when
+   present (written by `autop-onboard-project`; `<repo>` is the name without
+   the organisation) and note only `branches.default`, `branches.develop` and
+   `branches.release` from its front matter. A repo without one is fine; a
+   `profile:` other than `1` or unreadable front matter counts as absent, say so.
 
 Tell the user briefly what you found (board, repos, source of truth).
 
@@ -260,7 +266,15 @@ swapping two sub-issue bodies would be obviously wrong. Revise until true.
 **Show the user the planned issues** — titles, repos (with the inference
 reason), priority, board, epic/sub-issue structure, blockers, per-story code
 estimates and verification runtime assumptions — and get an
-explicit yes. Issue creation is outward-facing.
+explicit yes. Issue creation is outward-facing. For an epic, name for each
+repo a story changes the branch its integration branch is cut from:
+"integration branch cut from `<default>`", the GitHub default branch Step 5
+cuts from, read with
+`gh repo view <ORG>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`.
+When that repo's profile records a `develop` that differs from it, add one
+sentence: "the profile records `<develop>` as the develop branch; Autop
+integrates and releases on the default branch today, the profile's branch is
+for a later plane feature".
 
 ## Step 5 — Create + register
 
