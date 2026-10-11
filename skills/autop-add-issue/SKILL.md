@@ -15,8 +15,8 @@ under the person's own login.
 
 The Autop console offers the same workflow as a chat: **Plan work** on the
 project page at `https://app.autop.dev`. It follows the same rules as this
-skill and files the same issues, through the plane instead of your `gh`
-login. Prefer the chat when there is no CLI or coding agent on the machine,
+skill and files the same issues, through the plane instead of the person's
+`gh` login. Prefer the chat when there is no CLI or coding agent on the machine,
 or when several people are discussing the work; prefer this skill when a
 checkout is at hand or an existing spec is to be amended.
 
