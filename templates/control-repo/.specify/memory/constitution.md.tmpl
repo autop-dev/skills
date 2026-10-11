@@ -1,0 +1,61 @@
+# Constitution
+
+Reviewer-facing projection of `AGENTS.md` in `{{control_repo}}` and the
+product repositories' code-review focus. Applies to every repository of the
+`{{org}}` project on {{board_url}}:
+
+{{repos}}
+
+`AGENTS.md` is canonical; amend this projection alongside invariant changes.
+
+## Core principles
+
+### I. Architecture invariants
+`{{source_of_truth}}` owns the architecture. These invariants hold in every
+change; breaking one is a blocking finding unless a dated decision records
+why it changes:
+
+{{invariants}}
+
+### II. Credentials and secrets
+No secret, token or authenticated URL reaches source, logs, pull request
+bodies, issues or prompts. Credentials stay with the system that owns them and
+are never copied, printed or widened to make progress.
+
+### III. Specified, story-scoped work
+Every change implements one pinned user story or one issue's acceptance
+criteria. A change outside that scope is a new story. A spec change is a new
+commit in the control repository and a re-pinned issue.
+
+### IV. Tested behaviour
+Every story has testable acceptance scenarios and named tests. Tests cover
+failure and edge paths, not only the happy path, and run against disposable
+resources, never production.
+
+### V. Recorded decisions
+Non-trivial decisions are recorded with date, rationale and rejected
+alternative in the control repository, never in a product repository.
+
+## Code review focus
+
+{{review_focus}}
+
+## Quality and workflow
+
+Use the pinned spec, plan, tasks and this constitution for the assigned story;
+otherwise use the issue's acceptance criteria. Complete code, tests and
+self-review fixes before running tests. Run every gate in the affected
+repository's `AGENTS.md` once the work is ready and before a pull request is
+opened or repaired. UI changes include desktop and mobile visual verification.
+
+Autop owns board status and scheduling. One pull request per affected
+repository; epic sub-PRs branch from and target the recorded integration
+branch. Review findings are BLOCKING / SHOULD / NIT; approval means no
+blockers remain. Agents do not merge or change routing policy.
+
+## Governance
+
+Amend this constitution together with the playbook change that motivates it,
+and verify it in review.
+
+**Version**: 1.0.0 | **Ratified**: {{date}} | **Last Amended**: {{date}}
