@@ -19,7 +19,7 @@ human actions.
 |---|---|---|
 | Sign-in and a workspace | https://app.autop.dev (GitHub OAuth) | person |
 | Three GitHub Apps installed on the **organisation** that owns the repos: *Autop ATC*, *Autop Coder*, *Autop Reviewer* | GitHub org settings, via the console's install links (Organisations page, in that order) | person (org owner) |
-| A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub | person, or this skill with `gh` |
+| A Projects v2 board **owned by that organisation** with a `Status` field holding `Todo`, `In Progress`, `Ready for Review`, `Blocked`, `Done` (a `Priority` field with `P0`–`P3` is optional, cosmetic) | GitHub, created from the Autop console's new-project wizard ("Create a board for me") or repaired from project settings | person in the console; or a person with `gh` (or this skill) plus the GitHub UI |
 | A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | created by the console (or by the person from the console's prefilled link); this skill fills it |
 | Every product repo and the control repo covered by all three App installations | GitHub | person, from the console's per-App links (the Organisations coverage table, the project page) |
 | `AGENTS.md` in every product repo: how to build, test and lint, the code-review focus | repo | this skill |
@@ -89,10 +89,16 @@ control repo exists is listed and confirmed again when it comes due.
   branch and open a PR, unless the person asks for a direct push.
 - **Labels.** `autop issue labels <ORG>/<repo> ...` for every product repo
   and the control repo (once it exists).
-- **Board.** If no board exists and the person agrees, create one:
+- **Board.** The console comes first: with no board, the person creates one
+  from the new-project wizard ("Create a board for me") while creating the
+  project in Step 3, after the Apps are installed; it gets the `Status`
+  options and the `Priority` field. An existing board missing options is
+  repaired from the project's Settings → Board once that project exists.
+  Only as the manual alternative, if the person agrees, create one with
   `gh project create --owner <ORG> --title "<name>"`, then add the missing
-  `Status` options and the optional `Priority` field through the GitHub UI
-  (`gh` cannot edit single-select options). Say exactly which options to add.
+  `Status` options (`Todo`, `In Progress`, `Ready for Review`, `Blocked`,
+  `Done`) and the optional `Priority` field (`P0`–`P3`) through the GitHub UI
+  (the console repairs options; `gh` cannot). Say exactly which options to add.
 
 ## Step 3 — Hand over the console side
 
@@ -109,10 +115,11 @@ the Apps the discovery found missing, and say whether a control repo exists.
    added to each App. Both are supported; an uncovered cell in the page's
    coverage table links to the settings of the App that lacks the repository.
 2. Create the project: organisation, board, control repo, product repos.
-   Select the control repo when one exists. When none does, let the console
-   create it with **Create `<slug>-autopilot` for me** (`<slug>` is the
-   project's slug), or use the prefilled link to create it on GitHub when
-   that action is not offered (the form says when accepting Autop ATC's
+   Select the board when one exists; when none does, choose **Create a board
+   for me**. Select the control repo when one exists. When none does, let
+   the console create it with **Create `<slug>-autopilot` for me** (`<slug>`
+   is the project's slug), or use the prefilled link to create it on GitHub
+   when that action is not offered (the form says when accepting Autop ATC's
    updated permissions would enable it). Check the agent routes (which
    profile implements, reviews, repairs) and the merge policy. If the control
    repo is new, come back to this skill before step 4 so it fills and labels

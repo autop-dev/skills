@@ -20,8 +20,9 @@ creating issues and integration refs in Step 5.
 ## What Autop needs from an issue (why each step exists)
 
 - A **card on the project's board** (a Projects v2 board owned by the
-  project's GitHub organisation) with **Status = `Todo`**. There is no "Ready"
-  column; Autop does not add issues to the board by itself.
+  project's GitHub organisation) with **Status = `Todo`**. Autop adds an
+  issue carrying the `autop` label to the board as Todo itself; `autop issue
+  add` still adds the card immediately so the sweep sees it at once.
 - A **priority label** `P0`–`P3`. The board's Priority field is cosmetic; an
   issue without a label is picked last and its comments are ignored. `P0`
   starts immediately from the webhook — use it sparingly.
