@@ -79,9 +79,10 @@ The body names one of six categories: `secrets-and-credentials`,
 `authentication-and-sessions`, `data-exposure-and-logging`,
 `infrastructure-configuration`. The first, fourth and fifth add the
 `security` label. The priority label follows the severity: S1 → `P1`, S2 →
-`P2`, S3 and S4 → `P3` (never `P0`). An S1 issue also carries `needs-human`
-and waits for a person to confirm the finding before Autop changes anything;
-S2 and below carry `autop` and are worked like any other issue. Only
+`P2`, S3 and S4 → `P3` (never `P0`). Every finding issue carries `autop`;
+an S1 issue also carries `needs-human` and waits for a person to confirm the
+finding before Autop changes anything, while S2 and below are worked like any
+other issue. Only
 findings at or above the project's floor (S2 unless the project sets
 `audit.floor`) get their own issue; an S1 or S2 finding in a public
 repository is filed in the control repository with the repository name in
