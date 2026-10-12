@@ -26,6 +26,7 @@ human actions.
 | Autop's labels in every repo (`autop`, `P0`–`P3`, `epic`, `human-task`, `needs-human`, `blocked-on-question`) | repo | `autop issue labels` |
 | A project in the console binding organisation + board + control repo + repos, with agent routes | console | person |
 | At least one enrolled runner online, with ready repos and a usable coding CLI (ATC queues preparation jobs for missing policy repos) | the person's machine | person, with `autop runner setup` |
+| A first project audit | runs once by itself after the repositories are prepared; again from project settings | Autop; a person for a rerun |
 | A project profile `profile/<repo>.md` per product repo: branches, CI/CD, deploy targets, environments, services | control repo | `autop-onboard-project` |
 
 Personal-account repos and boards are rejected by design: everything lives
@@ -138,6 +139,9 @@ the Apps the discovery found missing, and say whether a control repo exists.
    not proof the service is online; verify that in the console.
    The runner needs the coding CLI logged in on that machine; Autop never
    sees those credentials.
+   Once every repository is prepared, Autop runs the project audit once by
+   itself and files its findings as `audit` issues plus one summary issue
+   (`autop-status` explains them); run it again from project settings.
 5. In each product repository's checkout run `autop-onboard-project` to
    record the project profile (branches, CI/CD, deploy targets, environments
    and services) as `profile/<repo>.md` in the control repo; merge the pull
