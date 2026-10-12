@@ -9,7 +9,7 @@ every GitHub write goes through your `gh` login.
 
 | Skill | Use it when |
 |---|---|
-| [`autop-add-issue`](skills/autop-add-issue/SKILL.md) | you want to add a task, story or epic to an Autop project. Runs the intake survey, drives spec-kit in the control repo, files one issue per user story with `autop issue add`, on the board as Todo, with native sub-issue and blocked-by links |
+| [`autop-add-issue`](skills/autop-add-issue/SKILL.md) | you want to add a task, story or epic to an Autop project. Runs the intake survey, drives spec-kit in the control repo, files one issue per user story with `autop issue add`, on the board as Todo, with native sub-issue and blocked-by links. The console's "Plan work" chat does the same without a local agent |
 | [`autop-setup-project`](skills/autop-setup-project/SKILL.md) | you are connecting an organisation, repos or a machine to Autop. Checks what exists, prepares `AGENTS.md`, the control repo and labels, hands over the console-side steps, then hands over to `autop-onboard-project` for the project profile |
 | [`autop-onboard-project`](skills/autop-onboard-project/SKILL.md) | you want Autop and your team to share how a repository is released: branches, CI/CD, deploy targets, environments, third-party services. Discovers read-only, asks what it cannot infer, writes `profile/<repo>.md` to the control repo through a PR |
 | [`autop-status`](skills/autop-status/SKILL.md) | you want to know what Autop is working on, why an issue is stuck, or what needs a human. Read-only |
@@ -49,6 +49,14 @@ ln -s ~/.autop/skills/skills/* ~/.agents/skills/
 The `autop` command (`curl -fsSL https://autop.dev/install.sh | sh`) is needed
 by `autop-add-issue` and `autop-status`; `gh` with the `project` scope
 (`gh auth refresh -s project`) is needed by all three.
+
+## Filing work from the console
+
+Without a CLI or coding agent, or when several people are discussing the
+work, open the project's page in the console at
+[app.autop.dev](https://app.autop.dev) and use **Plan work**. The chat follows
+the same rules as `autop-add-issue` and files the same issues through Autop's
+plane; nothing needs installing.
 
 ## Layout
 
