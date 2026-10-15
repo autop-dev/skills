@@ -45,6 +45,13 @@ Spec: <org>/<control-repo>@<40-hex sha>:specs/NNN-<slug>/spec.md#user-story-<n>
 ## Backwards compatibility
 <"Backwards compatible" OR "BREAKING — ships coordinated across: <consumers>">
 
+<!-- Required only for --human / human: true. No placeholders in filed issues. -->
+## Human intervention
+- Action: <precise human action and role>
+- Why automation cannot: <specific authority, access, decision or manual boundary>
+- Evidence: <observed failure or explicit policy/source; recovery tried or ruled out>
+- Resume when: <observable completion condition>
+
 ## Depends on
 <human-readable refs, or "none">
 

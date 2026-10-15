@@ -108,7 +108,8 @@ exact values:
 - **Backwards-incompatible? (API/SQL)** — no · YES (then it MUST ship
   coordinated across every consumer).
 - **Human-only?** — a step only a person can do (create an account, add a
-  secret, provision infra) becomes a `human-task`, which Autop never picks.
+  secret through a person-only interface) becomes a `human-task` only after
+  the evidence check below; infrastructure or production context alone is insufficient.
 - Free text: **Title** (short imperative), **Problem/why** (current
   behaviour, desired outcome, impact, evidence), **Hard constraints**,
   **Depends on** (`owner/repo#N` or bare `#N`), **Links**, **Out of scope**.
@@ -118,6 +119,34 @@ inspect `$AP`, the relevant repo docs/code and linked issues read-only. Infer
 technical context, not product decisions. Never invent endpoints, files,
 metrics, constraints or existing behaviour; label an unresolved detail as an
 assumption and ask only when it changes scope or outcome.
+
+## Human-task evidence gate
+
+Human intervention is exceptional. Default to automated work. Generated-type
+syncs, source-ref cleanup, code/tests/docs, routine verification, CI waits,
+ordinary implementation choices and dependencies on other automated issues are
+not human tasks. Represent waiting with native blockers and Blocked-by lines;
+never add needs-human merely because work is blocked or crosses repositories.
+A human task requires an identified action that the authorized automation cannot
+perform: exclusive human authority/access, a stakeholder decision, or an
+external/manual action. Inspect available evidence and safe authorized recovery
+first; do not infer missing access from a repo-scoped token's sibling-repo 404.
+Split only the genuinely human step out; keep the remaining work automated.
+For every human task include this exact section, with concrete non-placeholder
+values and no secrets:
+## Human intervention
+- Action: the precise action and responsible role
+- Why automation cannot: the specific permission, capability or decision boundary
+- Evidence: observed failure or explicit policy/source, and recovery tried or ruled out
+- Resume when: an observable completion condition
+Existing authorization counts; do not request it again. Security-sensitive words,
+production context, a failed first attempt or uncertainty alone do not prove a
+human is required. Preserve existing holds; never remove one to bypass a boundary.
+
+Use `--human` (console `human: true`) only when this gate passes. The CLI
+and console reject human proposals missing the section. Never pre-label an
+automated issue `needs-human`; ordinary dependencies need only blocker links.
+A missing dependency definition must be repaired in the issue plan.
 
 ## Step 2.5 — Enforce the issue-authoring route
 
