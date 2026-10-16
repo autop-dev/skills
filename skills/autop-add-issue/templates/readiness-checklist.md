@@ -15,3 +15,5 @@ Run as `/speckit.checklist autop readiness: one PR per story, at most 300 change
 - [ ] CHK011 — Does every story have evidence-based per-file code estimate ranges in tasks.md and its issue body, with a combined upper bound <=300 added + deleted production-code lines across all repos, excluding blank lines, comments, docs and tests? [Scope, Tasks, Issue]
 - [ ] CHK012 — Has oversized or insufficiently bounded work been split into an epic with individually bounded story sub-issues, preserving acceptance/test coverage, shared contracts and explicit blockers? [Coverage, Spec, Dependencies]
 - [ ] CHK013 — Are required gates and observed runtime (or unknown) recorded separately, with implementation/review/publication headroom considered and no gate skipped or timeout increased to fit oversized work? [Feasibility, Plan, Issue]
+
+- [ ] CHK014 — Is every human-task justified by a concrete Human intervention section (Action, Why automation cannot, Evidence, Resume when), with ordinary automated work and dependency waits kept out of human labels? [Feasibility, Issue]

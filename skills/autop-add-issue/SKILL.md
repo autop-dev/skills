@@ -13,6 +13,13 @@ Issue creation and relationship writes go through `autop issue` (installed
 with the `autop` command). Spec pushes and integration refs use Git and `gh`
 under the person's own login.
 
+The Autop console offers the same workflow as a chat: **Plan work** on the
+project's page in the console at `https://app.autop.dev`. It follows the same
+rules as this skill and files the same issues, through Autop's plane instead
+of the person's `gh` login. Prefer the chat when there is no CLI or coding
+agent on the machine, or when several people are discussing the work; prefer
+this skill when a checkout is at hand or an existing spec is to be amended.
+
 Do the steps in order. Confirm spec-kit initialization and spec publication
 before the writes in Step 3. Confirm the assembled issue plan in Step 4 before
 creating issues and integration refs in Step 5.
@@ -101,7 +108,8 @@ exact values:
 - **Backwards-incompatible? (API/SQL)** — no · YES (then it MUST ship
   coordinated across every consumer).
 - **Human-only?** — a step only a person can do (create an account, add a
-  secret, provision infra) becomes a `human-task`, which Autop never picks.
+  secret through a person-only interface) becomes a `human-task` only after
+  the evidence check below; infrastructure or production context alone is insufficient.
 - Free text: **Title** (short imperative), **Problem/why** (current
   behaviour, desired outcome, impact, evidence), **Hard constraints**,
   **Depends on** (`owner/repo#N` or bare `#N`), **Links**, **Out of scope**.
@@ -111,6 +119,64 @@ inspect `$AP`, the relevant repo docs/code and linked issues read-only. Infer
 technical context, not product decisions. Never invent endpoints, files,
 metrics, constraints or existing behaviour; label an unresolved detail as an
 assumption and ask only when it changes scope or outcome.
+
+## Human-task evidence gate
+
+Human intervention is exceptional. Default to automated work. Generated-type
+syncs, source-ref cleanup, code/tests/docs, routine verification, CI waits,
+ordinary implementation choices and dependencies on other automated issues are
+not human tasks. Represent waiting with native blockers and Blocked-by lines;
+never add needs-human merely because work is blocked or crosses repositories.
+A human task requires an identified action that the authorized automation cannot
+perform: exclusive human authority/access, a stakeholder decision, or an
+external/manual action. Inspect available evidence and safe authorized recovery
+first; do not infer missing access from a repo-scoped token's sibling-repo 404.
+Split only the genuinely human step out; keep the remaining work automated.
+For every human task include this exact section, with concrete non-placeholder
+values and no secrets:
+## Human intervention
+- Action: the precise action and responsible role
+- Why automation cannot: the specific permission, capability or decision boundary
+- Evidence: observed failure or explicit policy/source, and recovery tried or ruled out
+- Resume when: an observable completion condition
+Existing authorization counts; do not request it again. Security-sensitive words,
+production context, a failed first attempt or uncertainty alone do not prove a
+human is required. Preserve existing holds; never remove one to bypass a boundary.
+
+Before declaring a capability boundary, distinguish an operation forbidden to
+this job from an outcome that automation cannot achieve. Check an authorized
+alternative: a repo-local task branch and reviewed PR, existing plane actions,
+or separate repo-local automated prerequisites. A missing direct plane action,
+zero production-code changes, or a multi-repository operation does not by itself
+require a person. If support is genuinely missing, describe an automated
+implementation prerequisite and its dependencies; do not disguise a capability
+gap as human-only work or promise that an unsupported workflow already works.
+
+For an integration branch created before a prerequisite release, plan a refresh
+per repository after that release: merge the fetched default branch into a task
+branch based on the integration branch, resolve conflicts preserving both sides'
+intent, run repository gates, and open a PR into the integration branch. Verify
+that the configured merge method preserves ancestry (not squash/rebase); after
+merge, verify the required default-branch commit is an ancestor of the integration
+head. Pin that required commit after the prerequisite release, so unrelated later
+main commits do not keep moving the completion condition. Block importing stories
+on the corresponding refresh tasks. Do not instruct an ordinary implement job
+to push the shared integration branch directly, merge its own PR, or publish to
+sibling repositories. If the existing merge policy cannot preserve ancestry,
+include that automation prerequisite before claiming this plan is executable.
+
+When discovered during implementation, complete an in-scope repo-local repair
+through the assigned branch and PR if authorized. Otherwise report the exact
+automated prerequisite, owning repository, acceptance checks and dependency in
+the existing issue/PR handoff; use only an available authorized filing path.
+Do not turn a missing filing capability into a human-task, widen the job's token,
+remove holds, or claim blocked acceptance criteria are complete. Keep a genuinely
+human permission or product decision separate from the automated work.
+
+Use `--human` (console `human: true`) only when this gate passes. The CLI
+and console reject human proposals missing the section. Never pre-label an
+automated issue `needs-human`; ordinary dependencies need only blocker links.
+A missing dependency definition must be repaired in the issue plan.
 
 ## Step 2.5 — Enforce the issue-authoring route
 
@@ -348,3 +414,9 @@ order (blockers first); `P0` starts immediately. Nothing else to do.
 - Every issue filed by an agent carries the `autop` label (`autop issue add`
   adds it); do not remove it.
 - Never print, store or pass a token; `gh` holds the login.
+- **Keep aligned** (for maintainers of this skill, not a filing step). The
+  console chat's prompt restates this skill's rules. A change to the survey,
+  the sizing gate, the structure rules or the specificity contract here must
+  change the runner's authoring prompt
+  (`runner/autop_runner/executor/authoring_prompt.py` in `autop-dev/runner`)
+  in the same release, and the reverse.
