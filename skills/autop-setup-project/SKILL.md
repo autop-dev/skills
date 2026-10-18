@@ -13,6 +13,14 @@ Check first, change second, and never do the console side on the person's
 behalf: installing Apps, creating projects and enrolling runners are explicit
 human actions.
 
+The console's **Set up** conversation, available from a project page or the
+**Organisations** page at https://app.autop.dev, is this skill's counterpart:
+it reads the same facts, explains the same order and proposes the same files,
+which the plane writes as pull requests. Prefer the conversation when no CLI
+or coding agent is at hand, or when several people are setting up together;
+prefer this skill when a checkout is at hand, a direct push is wanted or a
+board should be created with `gh`.
+
 ## What a working project needs
 
 | Piece | Where | Who does it |
@@ -23,7 +31,7 @@ human actions.
 | A **control repo** in the same organisation holding the playbook (`AGENTS.md`), `specs/` and spec-kit (`.specify/`) | GitHub | created by the console (or by the person from the console's prefilled link); this skill fills it |
 | Every product repo and the control repo covered by all three App installations | GitHub | person, from the console's per-App links (the Organisations coverage table, the project page) |
 | `AGENTS.md` in every product repo: how to build, test and lint, the code-review focus | repo | this skill |
-| Autop's labels in every repo (`autop`, `P0`–`P3`, `epic`, `human-task`, `needs-human`, `blocked-on-question`) | repo | `autop issue labels` |
+| Autop's labels in every repo (`autop`, `P0`–`P3`, `epic`, `human-task`, `needs-human`, `blocked-on-question`, `retro-proposal`) | repo | `autop issue labels` |
 | A project in the console binding organisation + board + control repo + repos, with agent routes | console | person |
 | At least one enrolled runner online, with ready repos and a usable coding CLI (ATC queues preparation jobs for missing policy repos) | the person's machine | person, with `autop runner setup` |
 | A first project audit | runs once by itself after the repositories are prepared; again from project settings | Autop; a person for a rerun |
@@ -78,8 +86,9 @@ control repo exists is listed and confirmed again when it comes due.
   (`https://github.com/orgs/<ORG>/projects/<N>`), the product repos with one
   line each on their role, the "Source of truth:" repo, and the architecture
   invariants reviewers must enforce. Initialise spec-kit when absent:
-  `uv tool install specify-cli --from git+https://github.com/github/spec-kit.git`
-  then `specify init --here --ai <claude|codex> --non-interactive`, and seed
+  the console's **Set up** conversation uses the public scaffold at
+  `templates/control-repo/` instead of `uv tool install`; use that same
+  scaffold here, preserve its paths and fill its templates, including
   `.specify/memory/constitution.md` from those invariants. Commit and push.
 - **Product repos.** For each repo without an `AGENTS.md`, draft one from
   what the repo already declares (package manifests, CI workflow, Makefile,
@@ -165,3 +174,7 @@ deferred control repo and labels writes before they go on to item 4.
 - Do not run `autop issue add` here; filing work is `autop-add-issue`.
 - Every write (repo creation, pushes, labels, board) is listed and confirmed
   before it happens.
+- **Keep aligned.** A change to the needs table, the order, the drafting rules
+  or these guardrails changes
+  `runner/autop_runner/executor/setup_prompt.py` in the same release, and the
+  reverse.
