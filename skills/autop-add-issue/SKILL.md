@@ -110,6 +110,9 @@ exact values:
 - **Human-only?** — a step only a person can do (create an account, add a
   secret through a person-only interface) becomes a `human-task` only after
   the evidence check below; infrastructure or production context alone is insufficient.
+  Verification that needs a browser, a signed-in session, screenshots or
+  DevTools is human-only too: Autop implements headlessly, so it goes under
+  `## Verification (human)` in the issue body, never into a `[USn]` task.
 - Free text: **Title** (short imperative), **Problem/why** (current
   behaviour, desired outcome, impact, evidence), **Hard constraints**,
   **Depends on** (`owner/repo#N` or bare `#N`), **Links**, **Out of scope**.
@@ -220,6 +223,14 @@ from the sibling checkouts when planning.
    headlessly and cannot ask later.
 3. `/speckit.plan` → `plan.md`; `/speckit.tasks` → `tasks.md`, every task
    tagged `[USn]`. Apply the story sizing gate below before analysis.
+   **No `[USn]` task may need a browser, a signed-in session, a screenshot or
+   DevTools**: the implementer runs headless with no screen and no sign-in,
+   and an agent handed such a task improvises — a dev server in the
+   foreground (killed as a stall) or a module that fakes a signed-in user
+   (goodsender-admin#94). Keep automated checks as tasks; move the visual and
+   interactive checks into `## Verification (human)` in the issue body, with
+   the quickstart steps a person follows after the PR opens. The PR then says
+   `Visual verification: pending human`, and review never blocks on it.
 4. `/speckit.analyze` — fix every reported inconsistency.
 5. `/speckit.checklist autop readiness: one PR per story, at most 300 changed
    code lines per story excluding comments and tests, every FR has a scenario,
@@ -253,7 +264,12 @@ both sides. Exclude comments, docstrings, documentation and tests (including
 test-only fixtures); include SQL migrations, executable scripts, production
 configuration, UI markup and styles. A line containing code still counts when
 it has an inline comment. Do not use net line growth or compress formatting to
-meet the limit.
+meet the limit. **300 is the only limit.** The per-story range you record is
+an estimate for the reader, not a second cap: write it as `estimate <low–high>
+lines; limit 300`, never as an "upper bound" of its own, or the implementer
+packs two elements per line and splits nothing to land on the number
+(goodsender-admin#94 hit 220 of a "225 upper bound" by compressing JSX the
+reviewer then asked it to unpack).
 
 Before filing, inspect the likely code and record a per-file estimate range,
 its total upper bound, assumptions, and excluded test work in each story's

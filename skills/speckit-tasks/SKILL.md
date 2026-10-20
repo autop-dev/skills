@@ -85,6 +85,7 @@ You **MUST** consider the user input before proceeding (if not empty).
    - Create parallel execution examples per user story
    - Validate task completeness (each user story has all needed tasks, independently testable)
    - Limit each story to 12 tasks; split larger stories before filing. Every task has a `[USn]` tag and an exact target-repo file path.
+   - Never generate a task that needs a browser, a signed-in session, a screenshot or DevTools: the implementer runs headless. Automated tests and gates are tasks; visual and interactive checks go into the story's `## Verification (human)` notes for the issue body instead (Autop's `autop-add-issue` skill carries them over).
 
 4. **Generate tasks.md**: Use TASKS_TEMPLATE_CONTENT (from the JSON output above) as the structure. For compatibility with older setup scripts that omit TASKS_TEMPLATE_CONTENT, read TASKS_TEMPLATE instead. Fill with:
    - Correct feature name from plan.md
