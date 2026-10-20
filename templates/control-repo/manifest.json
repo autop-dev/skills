@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "source": {
+    "repo": "autop-dev/control",
+    "commit": "19b5516f1e91f546ac4c61a45cfda63f6e6aefc9"
+  },
+  "files": {
+    ".specify/.gitignore": {
+      "sha256": "8c908410d177a1ef3d0dee16d7ad55f2ac3333df3104c4d4adee1c9b82f1dbc1",
+      "mode": "copy"
+    },
+    ".specify/init-options.json": {
+      "sha256": "e8efba0c4b4682e3d8fa8bc6a50c5a748a748823ff540b85ec54347f07de3113",
+      "mode": "copy"
+    },
+    ".specify/integration.json": {
+      "sha256": "b51b64e22eafb9202755920e83cf3ad63f94354312e97694dd5fce6bdc52644e",
+      "mode": "copy"
+    },
+    ".specify/integrations/claude.manifest.json": {
+      "sha256": "08b980365f6e9c3ea7382f67918245118ed8499b7fbdb2a676ecccd8e450d393",
+      "mode": "copy"
+    },
+    ".specify/integrations/speckit.manifest.json": {
+      "sha256": "2e1265888c6b1a45b5afa9ffe5b2efbcbc2555e4459a60c8620f2a1f1d5eed0b",
+      "mode": "copy"
+    },
+    ".specify/memory/.constitution-template.json": {
+      "sha256": "8fc4b39294bae0c10d59547ad7d415b6f0e890d656cbf7171dd567f4e9054711",
+      "mode": "copy"
+    },
+    ".specify/memory/constitution.md.tmpl": {
+      "sha256": "e1ef08440b43919f624a29b04f6332253d330cc54ef9522b211db6390b64f21b",
+      "mode": "template"
+    },
+    ".specify/scripts/bash/check-prerequisites.sh": {
+      "sha256": "daa377146db4fb69912f42611a7b91c5d55873b3e3e27ed33bd8d67505826344",
+      "mode": "copy"
+    },
+    ".specify/scripts/bash/common.sh": {
+      "sha256": "657d584e6a7f6821c8d6d2975f76b0e4a001d0f78ec166c4a85bf536710a68f1",
+      "mode": "copy"
+    },
+    ".specify/scripts/bash/create-new-feature.sh": {
+      "sha256": "a78300cca39087b380b3ab1ed43f67b5cbc9ef05bdbf3027bacfcfb228d72ced",
+      "mode": "copy"
+    },
+    ".specify/scripts/bash/resolve-template.sh": {
+      "sha256": "829e227096abc8bf0889889ec9f792f503ca5d395b7836a8a7eb739ee75214e7",
+      "mode": "copy"
+    },
+    ".specify/scripts/bash/setup-plan.sh": {
+      "sha256": "d0bd298c026446f3c63167130d65e49e4aa4485de6bef18bcdfd57b19aa0de96",
+      "mode": "copy"
+    },
+    ".specify/scripts/bash/setup-tasks.sh": {
+      "sha256": "4a33dd1e6c32ddc7d570f4b538572c54069192573eed0ec654d9fb826e31a4fe",
+      "mode": "copy"
+    },
+    ".specify/templates/checklist-template.md": {
+      "sha256": "856532b3cb66171c662cc16f16b31a5856e4655a8666aad1e545bbfc7f603ca1",
+      "mode": "copy"
+    },
+    ".specify/templates/constitution-template.md": {
+      "sha256": "ce7549540fa45543cca797a150201d868e64495fdff39dc38246fb17bd4024b3",
+      "mode": "copy"
+    },
+    ".specify/templates/plan-template.md": {
+      "sha256": "7e637502d41eccf0ca672496636365691fdca62ef37b27ec07fcb412dbfa90d4",
+      "mode": "copy"
+    },
+    ".specify/templates/spec-template.md": {
+      "sha256": "3945437fc35cd30a5b2bf7beea680337c3516826d3efa5a6b92c4a7eca1ba28e",
+      "mode": "copy"
+    },
+    ".specify/templates/tasks-template.md": {
+      "sha256": "a53f139fe3b8baba48159541e57d80cd3f902b7bf315097f6068638e4b1c7a1d",
+      "mode": "copy"
+    },
+    "AGENTS.md.tmpl": {
+      "sha256": "d5abeebb1d6fed3deb266e1ca4d670cec0a67a60d3e16cc029ebb3e0e10aaf94",
+      "mode": "template"
+    },
+    "specs/README.md": {
+      "sha256": "6c0532d7fa0992c2850b8200e7349596232e151cee67fe157ce13b472ec132ff",
+      "mode": "copy"
+    }
+  }
+}

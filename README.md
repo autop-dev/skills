@@ -10,7 +10,7 @@ every GitHub write goes through your `gh` login.
 | Skill | Use it when |
 |---|---|
 | [`autop-add-issue`](skills/autop-add-issue/SKILL.md) | you want to add a task, story or epic to an Autop project. Runs the intake survey, drives spec-kit in the control repo, files one issue per user story with `autop issue add`, on the board as Todo, with native sub-issue and blocked-by links. The console's "Plan work" chat does the same without a local agent |
-| [`autop-setup-project`](skills/autop-setup-project/SKILL.md) | you are connecting an organisation, repos or a machine to Autop. Checks what exists, prepares `AGENTS.md`, the control repo and labels, hands over the console-side steps, then hands over to `autop-onboard-project` for the project profile |
+| [`autop-setup-project`](skills/autop-setup-project/SKILL.md) | you are connecting an organisation, repos or a machine to Autop. Checks what exists, prepares `AGENTS.md`, the control repo and labels, hands over the console-side steps, then hands over to `autop-onboard-project` for the project profile; the console's "Set up" conversation is the no-local-agent counterpart |
 | [`autop-onboard-project`](skills/autop-onboard-project/SKILL.md) | you want Autop and your team to share how a repository is released: branches, CI/CD, deploy targets, environments, third-party services. Discovers read-only, asks what it cannot infer, writes `profile/<repo>.md` to the control repo through a PR |
 | [`autop-status`](skills/autop-status/SKILL.md) | you want to know what Autop is working on, why an issue is stuck, or what needs a human. Read-only; explains audit findings |
 | `speckit-*` | the seven [GitHub spec-kit](https://github.com/github/spec-kit) authoring skills (`specify`, `clarify`, `plan`, `tasks`, `analyze`, `checklist`, `constitution`) that `autop-add-issue` drives, vendored authoring instructions; the control repo still needs spec-kit's `.specify/` scripts and templates |
@@ -63,7 +63,26 @@ plane; nothing needs installing.
 ```text
 skills/<name>/SKILL.md        one skill per directory, frontmatter name = directory
 skills/<name>/templates/      files the skill reads
+templates/control-repo/       control-repository scaffold, listed with sha256 in manifest.json
 ```
+
+## Control repository scaffold
+
+`templates/control-repo/` is what the Autop console's "Set up" chat writes
+into a customer's control repository: spec-kit's `.specify/` scripts and
+templates, copied byte-identical from `autop-dev/control` at the commit named
+in `manifest.json`, a generic `specs/README.md`, and the `AGENTS.md.tmpl` and
+`.specify/memory/constitution.md.tmpl` templates the setup agent fills (the
+`.tmpl` suffix is dropped in the customer's repository). The plane pins one
+commit of this repository and copies each `copy` file after checking its hash,
+so nothing is installed at job time. `manifest.json` lists every other file in
+the directory with its `sha256` and `mode` (`copy` or `template`); a template
+may use only `{{org}}`, `{{board_url}}`, `{{control_repo}}`, `{{repos}}`,
+`{{source_of_truth}}`, `{{invariants}}`, `{{review_focus}}` and `{{date}}`.
+`.github/check.py` fails naming the path when a hash differs, a file is
+unlisted or missing, or a template uses another placeholder. Change a file and
+its manifest entry in the same commit; refresh the `.specify/` copies only
+from control, updating `source.commit`.
 
 ## Contributing
 

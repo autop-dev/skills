@@ -1,0 +1,2 @@
+# The scaffold is pinned by byte hashes: never convert its line endings.
+templates/control-repo/** -text
