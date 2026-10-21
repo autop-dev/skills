@@ -377,10 +377,28 @@ autop issue add --board "$BOARD" --repo <ORG>/<repo> --priority P2 \
 4. The remaining stories: `--parent <epic ref> --spec …#user-story-<n>`, plus
    `--blocked-by <P1 story ref>` when tasks.md has a Foundational phase, and
    any other known blockers.
-5. Verify: `autop issue subs <epic ref>` must list exactly the story issues
-   created in this session. Retry only a missing link with
-   `autop issue link <story ref> --parent <epic ref>`; stop with the exact
-   mismatch if GitHub refuses.
+5. **Deploy-time human tasks**: a step that must precede the epic's release
+   merge rather than any story (a production migration, a manual deploy or
+   release step): `--human` and **no `--parent`**. An open sub-issue holds
+   the epic's finalize, so its release PR would never open. Make the epic
+   wait on each task both ways ATC reads it: the native link and a
+   `Blocked-by:` line in the epic body (the finalize job reads the body):
+
+   ```bash
+   autop issue link <epic ref> --blocked-by <task ref>
+   gh issue view <epic N> -R <ORG>/<repo> --json body -q .body > epic.md
+   printf '\nBlocked-by: %s\n' '<task ref>' >> epic.md
+   gh issue edit <epic N> -R <ORG>/<repo> --body-file epic.md
+   ```
+
+   ATC then opens the release PR once every story is closed and holds its
+   merge with a pending `Autop / deploy-blockers` status until each task is
+   closed. A human prerequisite of a story (an account or secret its code
+   needs) stays a blocker of that story instead.
+6. Verify: `autop issue subs <epic ref>` must list exactly the story issues
+   created in this session, without the deploy-time tasks. Retry only a
+   missing link with `autop issue link <story ref> --parent <epic ref>`;
+   stop with the exact mismatch if GitHub refuses.
 
 If `autop issue add` exits non-zero **after** printing `created <url>`, the
 issue exists: do not re-run `add` for it. Finish the named missing step —
@@ -407,6 +425,8 @@ order (blockers first); `P0` starts immediately. Nothing else to do.
 - Never file a story under an epic without the epic's `Integration branch:`
   line in its body and that branch present in its repo; never tell a story
   to target the default branch as a shortcut.
+- Never file a deploy-time human task as a sub-issue of its epic; it is a
+  `Blocked-by:` of the epic (Step 5, item 5).
 - Never hard-code the board, repos or organisation; discover them (Step 1).
 - Only file into the project's repos in `ORG`; a repo outside them → flag it
   and ask.
