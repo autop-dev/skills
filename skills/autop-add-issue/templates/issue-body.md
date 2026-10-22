@@ -22,8 +22,10 @@ spec-kit omits both sections and is implemented and reviewed against its
 <owner/repo (primary)>, <owner/repo>
 
 ## Size budget
-<!-- Required for every implementation story, including without spec-kit. -->
-- Changed production code: <low–high> lines; upper bound <=300 across all repos.
+<!-- Required for every implementation story, including without spec-kit.
+     The range is an estimate; 300 is the only limit and formatting is never
+     compressed to meet either. -->
+- Changed production code: estimate <low–high> lines; limit 300 across all repos (the estimate is not a cap).
 - Per-file estimates and assumptions: <repo/path: low–high; evidence/uncertainty>.
 - Count added + deleted code; exclude comments, blank lines, docs and tests.
 - Excluded test work: <fixtures/scenarios/files; still required>.
@@ -35,7 +37,14 @@ spec-kit omits both sections and is implemented and reviewed against its
 Spec: <org>/<control-repo>@<40-hex sha>:specs/NNN-<slug>/spec.md#user-story-<n>
 
 ## Tasks
-<the [USn] tasks from tasks.md>
+<the [USn] tasks from tasks.md — none of them needs a browser, a signed-in
+session, a screenshot or DevTools; the implementer is headless>
+
+<!-- only when the story changes UI or needs an interactive check -->
+## Verification (human)
+<the browser / screenshot / DevTools steps a person runs after the PR opens,
+with the seed data they need; the PR records them as
+"Visual verification: pending human" and review never blocks on them>
 
 <!-- only when there is no ## Spec; the heading is parsed verbatim by the
      reviewer, so never append to that line -->
