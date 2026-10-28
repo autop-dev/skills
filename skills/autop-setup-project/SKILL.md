@@ -97,6 +97,20 @@ control repo exists is listed and confirmed again when it comes due.
   verify each one runs. A `CLAUDE.md` that is a one-line import of
   `AGENTS.md` keeps Claude Code and Codex on the same file. Commit on a
   branch and open a PR, unless the person asks for a direct push.
+- **Declare gates.** For each product repo, read its `AGENTS.md` gates and
+  `.github/workflows/*.yml` and `.github/workflows/*.yaml`; use the exact
+  job/check names shown on pull requests to propose
+  `.github/autop-gates.toml`. Classify gates the runner can prove in its
+  workspace as `local`, and integration-heavy gates that CI proves as `ci`
+  with their exact `ci_check`. A `ci` gate is never run by an
+  Autop job and holds the merge until that check passes on the PR head. The
+  runner and the plane both read the base branch's copy, so a new or changed
+  declaration takes effect only after it merges. With no CI, every gate must
+  remain `local`, or the file must be omitted, because no check can prove a
+  `ci` gate. Read
+  [references/gates-declaration.md](references/gates-declaration.md) for the
+  v1 format and worked example. Show the proposal with the other writes;
+  never create or commit it unless the person confirms it.
 - **Labels.** `autop issue labels <ORG>/<repo> ...` for every product repo
   and the control repo (once it exists).
 - **Board.** The console comes first: with no board, the person creates one
