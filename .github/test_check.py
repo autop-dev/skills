@@ -54,6 +54,16 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
 
 
+class SetupProjectSkillTest(unittest.TestCase):
+    def test_gate_discovery_includes_yml_and_yaml_workflows(self):
+        skill = root / 'skills/autop-setup-project'
+        for path in (skill / 'SKILL.md', skill / 'references/gates-declaration.md'):
+            with self.subTest(path=path.relative_to(root)):
+                text = path.read_text()
+                self.assertIn('.github/workflows/*.yml', text)
+                self.assertIn('.github/workflows/*.yaml', text)
+
+
 class ScaffoldTest(unittest.TestCase):
     def test_shipped_tree_passes(self):
         result = run_check()

@@ -98,10 +98,11 @@ control repo exists is listed and confirmed again when it comes due.
   `AGENTS.md` keeps Claude Code and Codex on the same file. Commit on a
   branch and open a PR, unless the person asks for a direct push.
 - **Declare gates.** For each product repo, read its `AGENTS.md` gates and
-  `.github/workflows/*.yml`; use the exact job/check names shown on pull
-  requests to propose `.github/autop-gates.toml`. Classify gates the runner
-  can prove in its workspace as `local`, and integration-heavy gates that CI
-  proves as `ci` with their exact `ci_check`. A `ci` gate is never run by an
+  `.github/workflows/*.yml` and `.github/workflows/*.yaml`; use the exact
+  job/check names shown on pull requests to propose
+  `.github/autop-gates.toml`. Classify gates the runner can prove in its
+  workspace as `local`, and integration-heavy gates that CI proves as `ci`
+  with their exact `ci_check`. A `ci` gate is never run by an
   Autop job and holds the merge until that check passes on the PR head. The
   runner and the plane both read the base branch's copy, so a new or changed
   declaration takes effect only after it merges. With no CI, every gate must

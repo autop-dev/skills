@@ -3,8 +3,8 @@
 `.github/autop-gates.toml` version 1 tells Autop which required gates the
 runner must make green locally and which ones CI proves. Propose it from the
 repository's `AGENTS.md` gates and the check names produced by
-`.github/workflows/*.yml`; copy each CI name exactly as it appears in a pull
-request's checks list.
+`.github/workflows/*.yml` and `.github/workflows/*.yaml`; copy each CI name
+exactly as it appears in a pull request's checks list.
 
 ## Version 1 format
 
