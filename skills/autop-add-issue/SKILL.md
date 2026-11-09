@@ -181,23 +181,26 @@ and console reject human proposals missing the section. Never pre-label an
 automated issue `needs-human`; ordinary dependencies need only blocker links.
 A missing dependency definition must be repaired in the issue plan.
 
-## Step 2.5 — Enforce the issue-authoring route
+## Step 2.5 — Choose the authoring model (guidance, not a gate)
 
-The final issue title and body are implementation specifications. Apply this
-purpose matrix exactly:
+The final issue title and body are an implementation specification whose quality
+is bounded by the model writing them.
 
-| Purpose | Eligible final author | Not eligible for that purpose |
-|---|---|---|
-| Issue authoring/refinement | Claude **Fable** with high thinking (`think-hard` or stronger), or Codex **SOL** with high reasoning effort | Claude Opus/Sonnet and Codex Terra |
-| Later implementation (by Autop's runner) | as the project's routing configures | — |
+**Strongly recommended: the most capable model available on the current host, at
+its highest reasoning or thinking setting**.
 
-Before Step 3, determine the current host and model. If it is eligible, use
-it. Otherwise delegate explicitly to an eligible model through the host's
-supported mechanism, passing the user's request plus only the read-only
-evidence gathered in Steps 1–2. Never let an ineligible session author the
-final body, silently fall back, or perform a GitHub write. If the host cannot
-delegate, stop before Step 3 and tell the user which route is unavailable and
-how to select it. The user still confirms before anything is created.
+This skill names no model as eligible or ineligible because capability tiers
+change faster than this document.
+
+Before Step 3, state which model and reasoning setting the session runs on. When
+a stronger one is available on the host, explain how to select it or offer to
+delegate the authoring with only the read-only evidence gathered in Steps 1–2.
+Continue with the current session when the person prefers; never stop or silently
+fall back. The user still confirms before anything is created.
+
+The console's "Plan work" chat offers the same choice as the project's configured
+authoring profiles; Autop's implementation route is the project's configured
+routing, unaffected by this choice.
 
 ## Step 3 — Author the spec with spec-kit (in `$AP`)
 
