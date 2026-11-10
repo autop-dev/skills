@@ -12,8 +12,9 @@ Run as `/speckit.checklist autop readiness: one PR per story, at most 300 change
 - [ ] CHK008 — Does plan.md name every contract change (schema, API, config key, label, board field) and its consumers? [Completeness, Plan]
 - [ ] CHK009 — Does the constitution reflect this workspace's architecture invariants and code-review hazards, and does the spec contradict none of them? [Consistency, Constitution]
 - [ ] CHK010 — Can a fresh agent implement each story from spec.md + plan.md + its `[USn]` tasks alone, with no chat history? [Clarity, Gap]
-- [ ] CHK011 — Does every story have evidence-based per-file code estimate ranges in tasks.md and its issue body, with a combined upper bound <=300 added + deleted production-code lines across all repos, excluding blank lines, comments, docs and tests? [Scope, Tasks, Issue]
+- [ ] CHK011 — Does every story have evidence-based per-file code estimate ranges in tasks.md, with a combined upper bound <=300 added + deleted production-code lines across all repos, excluding blank lines, comments, docs and tests? [Scope, Tasks, Issue]
 - [ ] CHK012 — Has oversized or insufficiently bounded work been split into an epic with individually bounded story sub-issues, preserving acceptance/test coverage, shared contracts and explicit blockers? [Coverage, Spec, Dependencies]
 - [ ] CHK013 — Are required gates and observed runtime (or unknown) recorded separately, with implementation/review/publication headroom considered and no gate skipped or timeout increased to fit oversized work? [Feasibility, Plan, Issue]
 
 - [ ] CHK014 — Is every human-task justified by a concrete Human intervention section (Action, Why automation cannot, Evidence, Resume when), with ordinary automated work and dependency waits kept out of human labels? [Feasibility, Issue]
+- [ ] CHK015 — Is every issue body under its ceiling (4,096 bytes story/standalone/human task, 6,144 bytes epic) with the machine lines present? [Scope, Issue]
