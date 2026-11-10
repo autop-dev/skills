@@ -1,90 +1,114 @@
 # Autop issue body
 
-The uniform body every issue filed by `autop-add-issue` carries. Omit a
-section that would be empty boilerplate; never omit a known constraint.
+Every issue filed by `autop-add-issue` is a short brief for a person. The
+pinned spec is the specification for the implementer and both reviewers, who
+receive that commit's `spec.md`, `plan.md`, `tasks.md` and constitution.
 
-`## Spec` / `## Tasks` come from the spec-kit artifacts committed to the
-project's configured control repo (any name, for example `autop-dev/control`).
-The `Spec:` line is machine-read
-by Autop: the implementer and both reviewers get that exact commit's
-`spec.md`, `plan.md`, `tasks.md` and constitution. An issue filed without
-spec-kit omits both sections and is implemented and reviewed against its
-`## Acceptance criteria`.
+Story, standalone and human-task bodies have a 4,096-byte ceiling; epic
+bodies have a 6,144-byte ceiling. These are UTF-8 byte counts of the whole
+body after `autop issue add` appends any `Spec:` and `Blocked-by:` lines. The
+CLI refuses a longer body. Omit an optional section or machine line when it
+does not apply, but never omit a known constraint.
+
+## Story or standalone issue
 
 ```
-## Problem
-<current behaviour or gap, desired outcome, who/what is affected, why it matters>
+<1–3 sentences: what is wrong or missing today, what is true once this is done, who notices.>
 
-## Type / Priority
-<feature | fix | tech-debt | infra | docs> · <P0 | P1 | P2 | P3>
+## What changes
+- <2–6 bullets in plain words, each naming the repo, surface or module it touches. No code, SQL, line numbers or file lists.>
 
-## Affected repo(s)
-<owner/repo (primary)>, <owner/repo>
+## Done when
+Full scenarios: [spec, user story N](https://github.com/<org>/<control>/blob/<SPEC_SHA>/specs/NNN-<slug>/spec.md#user-story-N)
+- <3–6 one-line checks derived from the scenarios, never copied: happy path, a failure or edge case, and the test or gate that proves it.>
+
+## Out of scope
+- <0–3 bullets; omit this section when empty.>
 
 ## Size budget
-<!-- Required for every implementation story, including without spec-kit.
-     The range is an estimate; 300 is the only limit and formatting is never
-     compressed to meet either. -->
-- Changed production code: estimate <low–high> lines; limit 300 across all repos (the estimate is not a cap).
-- Per-file estimates and assumptions: <repo/path: low–high; evidence/uncertainty>.
-- Count added + deleted code; exclude comments, blank lines, docs and tests.
-- Excluded test work: <fixtures/scenarios/files; still required>.
-- Verification: <required gates; observed runtime or unknown; job-time headroom>.
-
-## Spec
-<the story's acceptance scenarios (Given/When/Then), copied verbatim from spec.md>
-
-Spec: <org>/<control-repo>@<40-hex sha>:specs/NNN-<slug>/spec.md#user-story-<n>
-
-## Tasks
-<the [USn] tasks from tasks.md — none of them needs a browser, a signed-in
-session, a screenshot or DevTools; the implementer is headless>
-
-<!-- only when the story changes UI or needs an interactive check -->
-## Verification (human)
-<the browser / screenshot / DevTools steps a person runs after the PR opens,
-with the seed data they need; the PR records them as
-"Visual verification: pending human" and review never blocks on them>
-
-<!-- only when there is no ## Spec; the heading is parsed verbatim by the
-     reviewer, so never append to that line -->
-## Acceptance criteria
-- [ ] ...
-
-## Backwards compatibility
-<"Backwards compatible" OR "BREAKING — ships coordinated across: <consumers>">
-
-<!-- Required only for --human / human: true. No placeholders in filed issues. -->
-## Human intervention
-- Action: <precise human action and role>
-- Why automation cannot: <specific authority, access, decision or manual boundary>
-- Evidence: <observed failure or explicit policy/source; recovery tried or ruled out>
-- Resume when: <observable completion condition>
-
-## Depends on
-<human-readable refs, or "none">
+upper bound <= N changed code lines (estimate in tasks.md)
 
 Blocked-by: #N
-Blocked-by: owner/repo#N
-
-<!-- only for a story under an epic: the epic's line, verbatim -->
 Integration branch: epic/NNN-<slug>
-
-## Links
-<...>
-
-## Out of scope / notes
-<...>
+Spec: <org>/<control>@<SPEC_SHA>:specs/NNN-<slug>/spec.md#user-story-N
 ```
 
-For an **epic** body add: the end-to-end outcome, the shared contract or
-architecture, rollout/compatibility strategy, ordering, a checklist mapping
-every sub-issue to its repo, deliverable and code budget (each <=300), and the line
+## Human-task issue
+
+Use this variant only for a genuinely human action. It replaces `## What
+changes` with the exact intervention evidence section; no placeholders may
+remain in a filed issue.
 
 ```
+<1–3 sentences: what is blocked, what becomes true after the action, who notices.>
+
+## Human intervention
+- Action: <precise human action and responsible role>
+- Why automation cannot: <specific permission, capability or decision boundary>
+- Evidence: <observed failure or explicit policy/source, and recovery tried or ruled out>
+- Resume when: <observable completion condition>
+
+## Done when
+Full scenarios: [spec, user story N](https://github.com/<org>/<control>/blob/<SPEC_SHA>/specs/NNN-<slug>/spec.md#user-story-N)
+- <3–6 one-line checks derived from the scenarios, never copied.>
+
+## Out of scope
+- <0–3 bullets; omit this section when empty.>
+
+## Size budget
+upper bound <= N changed code lines (estimate in tasks.md)
+
+Blocked-by: #N
+Integration branch: epic/NNN-<slug>
+Spec: <org>/<control>@<SPEC_SHA>:specs/NNN-<slug>/spec.md#user-story-N
+```
+
+## Issue without a pinned spec
+
+Use this story/standalone fallback and write 3–8 checks. The heading is
+machine-read, so never append text to it. A human-task fallback replaces
+`## What changes` with `## Human intervention` as above.
+
+```
+<1–3 sentences: what is wrong or missing today, what is true once this is done, who notices.>
+
+## What changes
+- <2–6 bullets in plain words, each naming the repo, surface or module it touches.>
+
+## Acceptance criteria
+- <3–8 one-line, atomic, observable checks.>
+
+## Out of scope
+- <0–3 bullets; omit this section when empty.>
+
+## Size budget
+upper bound <= N changed code lines (estimate in tasks.md)
+
+Blocked-by: #N
 Integration branch: epic/NNN-<slug>
 ```
 
-which Autop reads when building and merging the epic's work. Every story
-sub-issue repeats that line verbatim, and the branch exists in each repo a
-story changes; ATC refuses a story whose line or branch is missing.
+## Epic issue
+
+```
+<2–4 sentences: the outcome when every story is done, who benefits.>
+
+## Stories
+- [ ] `<org>/<repo>` — <one-line deliverable> (#N)
+
+## Rollout
+- <1–4 bullets: order, compatibility, what deploys when, any human step.>
+
+Full plan: [spec](https://github.com/<org>/<control>/blob/<SPEC_SHA>/specs/NNN-<slug>/spec.md) · [plan](https://github.com/<org>/<control>/blob/<SPEC_SHA>/specs/NNN-<slug>/plan.md)
+
+Integration branch: epic/NNN-<slug>
+Integration repositories: <org>/<a>, <org>/<b>
+Release order: `<org>/<a>` → `<org>/<b>`
+Blocked-by: #N
+Spec: <org>/<control>@<SPEC_SHA>:specs/NNN-<slug>/spec.md#user-story-1
+```
+
+`Integration repositories:`, `Release order:` and `Blocked-by:` appear only
+when they apply. The shared contract, architecture and rollout detail stay in
+`plan.md`. Every story sub-issue has its own distinct brief and repeats the
+epic's `Integration branch:` line verbatim.

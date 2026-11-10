@@ -45,6 +45,12 @@ creating issues and integration refs in Step 5.
   story's implement job when its parent's line or branch is missing.
 - **Optional `Spec:` line** pinning a commit of the project's control repo; a
   spec in any other repo fails the implement job.
+- A **short issue brief** in the applicable story, standalone, human-task or
+  epic shape. The pinned spec is the implementer's and reviewers'
+  specification. Story, standalone and human-task bodies are at most 4,096
+  UTF-8 bytes; epic bodies are at most 6,144 bytes, counted after `autop issue
+  add` appends any `Spec:` and `Blocked-by:` lines. The CLI refuses a longer
+  body.
 - `epic`, `human-task`, `needs-human` and `blocked-on-question` keep an issue
   from being picked.
 
@@ -111,8 +117,9 @@ exact values:
   secret through a person-only interface) becomes a `human-task` only after
   the evidence check below; infrastructure or production context alone is insufficient.
   Verification that needs a browser, a signed-in session, screenshots or
-  DevTools is human-only too: Autop implements headlessly, so it goes under
-  `## Verification (human)` in the issue body, never into a `[USn]` task.
+  DevTools is human-only too: Autop implements headlessly, so record it in the
+  pinned spec and later as `Visual verification: pending human` in the PR,
+  never as a `[USn]` task or an extra issue-body section.
 - Free text: **Title** (short imperative), **Problem/why** (current
   behaviour, desired outcome, impact, evidence), **Hard constraints**,
   **Depends on** (`owner/repo#N` or bare `#N`), **Links**, **Out of scope**.
@@ -230,10 +237,10 @@ from the sibling checkouts when planning.
    DevTools**: the implementer runs headless with no screen and no sign-in,
    and an agent handed such a task improvises — a dev server in the
    foreground (killed as a stall) or a module that fakes a signed-in user
-   (goodsender-admin#94). Keep automated checks as tasks; move the visual and
-   interactive checks into `## Verification (human)` in the issue body, with
-   the quickstart steps a person follows after the PR opens. The PR then says
-   `Visual verification: pending human`, and review never blocks on it.
+   (goodsender-admin#94). Keep automated checks as tasks; record visual and
+   interactive checks in the pinned spec or plan, with the quickstart steps a
+   person follows after the PR opens. The PR then says `Visual verification:
+   pending human`, and review never blocks on it.
 4. `/speckit.analyze` — fix every reported inconsistency.
 5. `/speckit.checklist autop readiness: one PR per story, at most 300 changed
    code lines per story excluding comments and tests, every FR has a scenario,
@@ -275,11 +282,13 @@ packs two elements per line and splits nothing to land on the number
 reviewer then asked it to unpack).
 
 Before filing, inspect the likely code and record a per-file estimate range,
-its total upper bound, assumptions, and excluded test work in each story's
-`## Size budget` and, when using spec-kit, `tasks.md`. Include foundational work
-in its owning story's budget. If the upper bound exceeds 300, or uncertainty
-prevents a credible bound, narrow the scope and split it before filing. Recheck after planning,
-analysis and any scope change; never rubber-stamp a 300-line estimate.
+its total upper bound, assumptions and excluded test work in `tasks.md`. The
+issue carries only `upper bound <= N changed code lines (estimate in
+tasks.md)` under `## Size budget`. Include foundational work in its owning
+story's budget. If the upper bound exceeds 300, or uncertainty prevents a
+credible bound, narrow the scope and split it before filing. Recheck after
+planning, analysis and any scope change; never rubber-stamp a 300-line
+estimate.
 
 Split by small, independently verifiable outcomes with explicit contracts and
 blockers, preserving every acceptance scenario and required test. Even a
@@ -315,37 +324,54 @@ gates or raising the timeout to make an oversized story fit.
 
 ## Step 4 — Assemble + confirm
 
-Build one body per issue from `templates/issue-body.md` (in this skill): the
-story's Given/When/Then scenarios copied verbatim from spec.md, the `[USn]`
-tasks, compatibility, dependencies with `Blocked-by:` lines, links, non-goals.
-Write each body to its own temp file.
+Build one body per issue from `templates/issue-body.md` (in this skill). A
+story or standalone body has a 1–3 sentence summary, 2–6 `## What changes`
+bullets, and 3–6 one-line `## Done when` checks derived from the story's
+scenarios and never copied. Put the `Full scenarios:` GitHub blob link to
+`spec.md` at `SPEC_SHA` with the story anchor directly below that heading.
+Add optional `## Out of scope`, then the one-line `## Size budget` containing
+only `upper bound <= N changed code lines (estimate in tasks.md)`. Tasks,
+per-file estimates, assumptions and verification runtimes stay in `tasks.md`.
+Without a pinned spec, use the machine-read `## Acceptance criteria` heading
+with 3–8 one-line checks and omit `Full scenarios:`. Write each body to its
+own temp file. Story, standalone and human-task bodies allow at most 4,096
+UTF-8 bytes; epic bodies allow at most 6,144 UTF-8 bytes. `autop issue add`
+refuses any oversized body.
 
 ### Specificity contract
 
-Each issue is a standalone implementation brief a fresh agent can execute
-without the chat. Concise is fine; vague is not.
+The body is a brief for a person; the pinned spec is the implementer's and
+reviewers' specification. Concise is required; vague is not.
 
-- **Problem:** current behaviour or gap, desired outcome, who/what is
-  affected, why it matters; concrete surfaces found during discovery. Not a
-  restated title.
-- **Scope:** the repo-specific responsibility, constraints, integration
-  points, verified likely files; required behaviour vs hints.
-- **Acceptance:** 3–8 atomic, observable, pass/fail checks (the spec's
-  scenarios) covering happy path, failure/edge cases and verification. Never
-  "works correctly", "handle edge cases", or "add tests" without saying what.
-- **Boundaries:** non-goals, preserved behaviour, labelled assumptions.
+- **Summary:** say what is wrong or missing today, what becomes true, who
+  notices and why it matters. Name concrete surfaces found during discovery;
+  do not restate the title.
+- **What changes:** describe the repo-specific responsibility, constraints
+  and integration points in plain words. Name the repo, surface or module,
+  but include no code, SQL, line numbers or file lists; distinguish required
+  behaviour from hints.
+- **Done when:** use atomic, observable, pass/fail checks derived from the
+  scenarios, covering the happy path, a failure or edge case, and the test or
+  gate that proves it. Never say "works correctly", "handle edge cases" or
+  "add tests" without saying what.
+- **Out of scope:** name non-goals and preserved behaviour; label assumptions.
+  Omit the section when empty. Fold compatibility, dependencies and links
+  into these sections or the applicable machine lines.
 
-For an **epic** add the end-to-end outcome, shared contract, rollout,
-ordering, and a checklist mapping every sub-issue to its repo and
-deliverable. Every **sub-issue** gets a distinct body for its repo: the epic
+For an **epic**, use a 2–4 sentence outcome followed by `## Stories`, `##
+Rollout`, a `Full plan:` link, `Integration branch:`, and the applicable
+`Integration repositories:`, `Release order:`, `Blocked-by:` and `Spec:`
+lines. Keep the shared contract, architecture and rollout detail in
+`plan.md`. Every **sub-issue** gets a distinct brief for its repo: the epic
 link, the epic's `Integration branch:` line verbatim, its inputs/outputs, its
-exact deliverable, its dependencies, repo-local acceptance. Never copy the
-epic body into the sub-issues.
+exact deliverable, its dependencies and repo-local done checks. Never copy
+the epic body into the sub-issues.
 
 **Quality gate** before showing the plan: a fresh implementer can tell what
 changes, where, why, and what stays; every criterion is testable; claims are
 grounded or labelled; every story passes the sizing gate, including the
-no-spec fallback; sub-issues are non-duplicative and cover the epic;
+no-spec fallback; every body is under its ceiling (count the appended `Spec:`
+and `Blocked-by:` lines); sub-issues are non-duplicative and cover the epic;
 swapping two sub-issue bodies would be obviously wrong. Revise until true.
 
 **Show the user the planned issues** — titles, repos (with the inference
@@ -441,6 +467,7 @@ order (blockers first); `P0` starts immediately. Nothing else to do.
   that the feature's `inputs.json` does not declare with its current hash.
 - Never edit a spec after filing without re-pinning: a spec change is a new
   commit and every `Spec:` line must move to it.
+- Never file a body over its ceiling; shorten the brief, never the spec.
 - Never file a story under an epic without the epic's `Integration branch:`
   line in its body and that branch present in its repo; never tell a story
   to target the default branch as a shortcut.

@@ -64,6 +64,19 @@ class SetupProjectSkillTest(unittest.TestCase):
                 self.assertIn('.github/workflows/*.yaml', text)
 
 
+class AddIssueSkillTest(unittest.TestCase):
+    def test_step_4_states_body_ceilings_and_cli_refusal(self):
+        text = (root / 'skills/autop-add-issue/SKILL.md').read_text()
+        step_4 = text.split('## Step 4 — Assemble + confirm', 1)[1].split('## Step 5', 1)[0]
+        step_4 = ' '.join(step_4.split())
+        self.assertIn(
+            'Story, standalone and human-task bodies allow at most 4,096 UTF-8 bytes; '
+            'epic bodies allow at most 6,144 UTF-8 bytes. `autop issue add` refuses any '
+            'oversized body.',
+            step_4,
+        )
+
+
 class ScaffoldTest(unittest.TestCase):
     def test_shipped_tree_passes(self):
         result = run_check()
