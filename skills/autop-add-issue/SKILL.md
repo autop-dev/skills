@@ -334,7 +334,9 @@ only `upper bound <= N changed code lines (estimate in tasks.md)`. Tasks,
 per-file estimates, assumptions and verification runtimes stay in `tasks.md`.
 Without a pinned spec, use the machine-read `## Acceptance criteria` heading
 with 3–8 one-line checks and omit `Full scenarios:`. Write each body to its
-own temp file.
+own temp file. Story, standalone and human-task bodies allow at most 4,096
+UTF-8 bytes; epic bodies allow at most 6,144 UTF-8 bytes. `autop issue add`
+refuses any oversized body.
 
 ### Specificity contract
 
