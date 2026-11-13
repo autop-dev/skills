@@ -76,6 +76,67 @@ class AddIssueSkillTest(unittest.TestCase):
             step_4,
         )
 
+    def test_direct_repository_structure_and_story_routing(self):
+        text = (root / 'skills/autop-add-issue/SKILL.md').read_text()
+        structure = text.split('### Issue structure', 1)[1].split('## Step 4', 1)[0]
+        structure = ' '.join(structure.split())
+        self.assertIn(
+            'a repository with exactly one non-human story, where that story blocks no story '
+            'in another repository, is **direct**; every other repository is **integration**',
+            structure,
+        )
+        self.assertIn(
+            'The epic body always records `Integration branch: epic/NNN-<slug>` and names '
+            'direct repositories on `Direct repositories:`.',
+            structure,
+        )
+        self.assertIn(
+            'A direct repository has no integration branch; its story omits that line and its '
+            'PR targets the default branch.',
+            structure,
+        )
+
+    def test_direct_repository_confirmation_and_branch_creation(self):
+        text = (root / 'skills/autop-add-issue/SKILL.md').read_text()
+        step_4 = ' '.join(text.split('## Step 4 — Assemble + confirm', 1)[1]
+                          .split('## Step 5', 1)[0].split())
+        self.assertIn('"integration branch cut from `<default>`"', step_4)
+        self.assertIn('"direct: story PR targets `<default>`"', step_4)
+
+        step_5 = text.split('## Step 5 — Create + register', 1)[1].split('## Step 6', 1)[0]
+        branch_item = step_5.split('2. The **integration branch**', 1)[1].split('\n3.', 1)[0]
+        self.assertIn('in every integration repository', branch_item)
+        self.assertNotIn('in every repo a story changes', branch_item)
+
+        guardrails = ' '.join(text.split('## Guardrails', 1)[1].split())
+        self.assertIn(
+            'Never file an integration-repository story under an epic without the epic\'s '
+            '`Integration branch:` line in its body and that branch present in its repo; never '
+            'tell an integration-repository story to target the default branch as a shortcut.',
+            guardrails,
+        )
+
+    def test_direct_story_and_epic_body_variants(self):
+        text = (root / 'skills/autop-add-issue/templates/issue-body.md').read_text()
+        story = text.split('## Story or standalone issue', 1)[1].split('## Human-task issue', 1)[0]
+        self.assertIn(
+            'For a story in a direct repository, omit `Integration branch:`; its PR\n'
+            'targets the default branch. An integration-repository story keeps the line.',
+            story,
+        )
+
+        epic = text.split('## Epic issue', 1)[1]
+        self.assertIn(
+            'Integration repositories: <org>/<a>, <org>/<b>\n'
+            'Direct repositories: <org>/<c>, <org>/<d>',
+            epic,
+        )
+        self.assertIn(
+            'The epic always keeps its\n`Integration branch:` line, including when every '
+            'repository is direct.',
+            epic,
+        )
+
 
 class ScaffoldTest(unittest.TestCase):
     def test_shipped_tree_passes(self):

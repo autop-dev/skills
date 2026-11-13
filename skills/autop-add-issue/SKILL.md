@@ -38,11 +38,15 @@ creating issues and integration refs in Step 5.
   Task lists are not read. Only one sub-issue per epic runs at a time.
 - **Ordering**: native "blocked by" relationships (read first) plus
   `Blocked-by:` body lines (the fallback, and what epic finalize re-checks).
-- **Epic integration branch**: the epic body records `Integration branch:
-  epic/NNN-<slug>`, every story body mirrors that exact line, and the branch
-  exists in every repo a story changes. Story PRs branch from and target it;
-  only the epic's release PRs target the default branch. ATC refuses a
-  story's implement job when its parent's line or branch is missing.
+- **Epic repository routing**: the epic body always records `Integration
+  branch: epic/NNN-<slug>`. A repository with exactly one non-human story,
+  where that story blocks no story in another repository, is a **direct
+  repository** and is named on the epic's `Direct repositories:` line. It has
+  no integration branch; its story omits `Integration branch:`, and its PR
+  targets the default branch as that repository's release. Every other
+  repository is an **integration repository**: the branch exists there, each
+  story body mirrors the epic's line, story PRs target it, and only the epic's
+  release PR targets the default branch. ATC refuses inconsistent routing.
 - **Optional `Spec:` line** pinning a commit of the project's control repo; a
   spec in any other repo fails the implement job.
 - A **short issue brief** in the applicable story, standalone, human-task or
@@ -309,12 +313,17 @@ gates or raising the timeout to make an oversized story fit.
 
 - **One user story passing the sizing gate →** one plain issue (no epic).
 - **Two or more stories →** one **epic** in the source-of-truth repo + one
-  issue per story. The epic body records `Integration branch:
-  epic/NNN-<slug>` and every story body carries the same line verbatim; the
-  branch is created from the default branch in each repo a story changes
-  (Step 5) before that repo's stories are filed. If tasks.md has a non-empty
-  Foundational phase, every story after the P1 story is blocked by it;
-  otherwise stories are independent.
+  issue per story. Classify each repository the epic changes: a repository
+  with exactly one non-human story, where that story blocks no story in
+  another repository, is **direct**; every other repository is
+  **integration**. The epic body always records `Integration branch:
+  epic/NNN-<slug>` and names direct repositories on `Direct repositories:`.
+  In integration repositories the branch is created from the default branch
+  before stories are filed and every story body carries the epic's
+  `Integration branch:` line verbatim. A direct repository has no integration
+  branch; its story omits that line and its PR targets the default branch. If
+  tasks.md has a non-empty Foundational phase, every story after the P1 story
+  is blocked by it; otherwise stories are independent.
 - File each story in the repo its `[USn]` tasks change. A story spanning
   repos still gets ONE issue, in the source-of-truth repo, naming the others.
 - At most 100 stories per epic (GitHub's sub-issue limit), all in `ORG`.
@@ -360,12 +369,14 @@ reviewers' specification. Concise is required; vague is not.
 
 For an **epic**, use a 2–4 sentence outcome followed by `## Stories`, `##
 Rollout`, a `Full plan:` link, `Integration branch:`, and the applicable
-`Integration repositories:`, `Release order:`, `Blocked-by:` and `Spec:`
-lines. Keep the shared contract, architecture and rollout detail in
-`plan.md`. Every **sub-issue** gets a distinct brief for its repo: the epic
-link, the epic's `Integration branch:` line verbatim, its inputs/outputs, its
-exact deliverable, its dependencies and repo-local done checks. Never copy
-the epic body into the sub-issues.
+`Integration repositories:`, `Direct repositories:`, `Release order:`,
+`Blocked-by:` and `Spec:` lines. Keep the shared contract, architecture and
+rollout detail in `plan.md`. Every **sub-issue** gets a distinct brief for its
+repo: the epic link, its inputs/outputs, its exact deliverable, its
+dependencies and repo-local done checks. An integration-repository story
+repeats the epic's `Integration branch:` line verbatim; a direct story omits
+that line and targets the default branch. Never copy the epic body into the
+sub-issues.
 
 **Quality gate** before showing the plan: a fresh implementer can tell what
 changes, where, why, and what stays; every criterion is testable; claims are
@@ -378,9 +389,9 @@ swapping two sub-issue bodies would be obviously wrong. Revise until true.
 reason), priority, board, epic/sub-issue structure, blockers, per-story code
 estimates and verification runtime assumptions — and get an
 explicit yes. Issue creation is outward-facing. For an epic, name for each
-repo a story changes the branch its integration branch is cut from:
-"integration branch cut from `<default>`", the GitHub default branch Step 5
-cuts from, read with
+repo a story changes either "integration branch cut from `<default>`" or
+"direct: story PR targets `<default>`", using the GitHub default branch read
+with
 `gh repo view <ORG>/<repo> --json defaultBranchRef -q .defaultBranchRef.name`.
 When that repo's profile records a `develop` that differs from it, add one
 sentence: "the profile records `<develop>` as the develop branch; Autop
@@ -407,7 +418,7 @@ autop issue add --board "$BOARD" --repo <ORG>/<repo> --priority P2 \
 **Epic — create in this order** (a link can only name an issue that exists):
 
 1. The **epic**, in the source-of-truth repo: `--epic --spec …#user-story-1`.
-2. The **integration branch**, in every repo a story changes, when absent:
+2. The **integration branch**, in every integration repository, when absent:
 
    ```bash
    gh api -X POST repos/<ORG>/<repo>/git/refs -f ref=refs/heads/epic/NNN-<slug> \
@@ -468,9 +479,10 @@ order (blockers first); `P0` starts immediately. Nothing else to do.
 - Never edit a spec after filing without re-pinning: a spec change is a new
   commit and every `Spec:` line must move to it.
 - Never file a body over its ceiling; shorten the brief, never the spec.
-- Never file a story under an epic without the epic's `Integration branch:`
-  line in its body and that branch present in its repo; never tell a story
-  to target the default branch as a shortcut.
+- Never file an integration-repository story under an epic without the epic's
+  `Integration branch:` line in its body and that branch present in its repo;
+  never tell an integration-repository story to target the default branch as
+  a shortcut.
 - Never file a deploy-time human task as a sub-issue of its epic; it is a
   `Blocked-by:` of the epic (Step 5, item 5).
 - Never hard-code the board, repos or organisation; discover them (Step 1).
