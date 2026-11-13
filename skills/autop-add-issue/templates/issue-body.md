@@ -33,6 +33,9 @@ Integration branch: epic/NNN-<slug>
 Spec: <org>/<control>@<SPEC_SHA>:specs/NNN-<slug>/spec.md#user-story-N
 ```
 
+For a story in a direct repository, omit `Integration branch:`; its PR
+targets the default branch. An integration-repository story keeps the line.
+
 ## Human-task issue
 
 Use this variant only for a genuinely human action. It replaces `## What
@@ -103,12 +106,16 @@ Full plan: [spec](https://github.com/<org>/<control>/blob/<SPEC_SHA>/specs/NNN-<
 
 Integration branch: epic/NNN-<slug>
 Integration repositories: <org>/<a>, <org>/<b>
+Direct repositories: <org>/<c>, <org>/<d>
 Release order: `<org>/<a>` → `<org>/<b>`
 Blocked-by: #N
 Spec: <org>/<control>@<SPEC_SHA>:specs/NNN-<slug>/spec.md#user-story-1
 ```
 
-`Integration repositories:`, `Release order:` and `Blocked-by:` appear only
-when they apply. The shared contract, architecture and rollout detail stay in
-`plan.md`. Every story sub-issue has its own distinct brief and repeats the
-epic's `Integration branch:` line verbatim.
+`Integration repositories:`, `Direct repositories:`, `Release order:` and
+`Blocked-by:` appear only when they apply. The epic always keeps its
+`Integration branch:` line, including when every repository is direct. The
+shared contract, architecture and rollout detail stay in `plan.md`. Every
+story sub-issue has its own distinct brief. An integration-repository story
+repeats the epic's `Integration branch:` line verbatim; a direct story omits
+that line.
