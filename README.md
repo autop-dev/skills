@@ -3,13 +3,14 @@
 Agent Skills for working with [Autop](https://autop.dev), the Development
 Autopilot: file backlog work the way Autop's board sweep expects it, prepare a
 repository and organisation for Autop, and read what Autop is doing. They run
-in the coding agent you already use (Claude Code, Codex, or any host that
-reads the open Agent Skills layout) and never need Autop's own credentials:
-every GitHub write goes through your `gh` login.
+in the agent you already use (Claude Code, Codex, Hermes, OpenClaw, or any
+host that reads the open Agent Skills layout) and never need Autop's own
+credentials: every GitHub write goes through your `gh` login.
 
 | Skill | Use it when |
 |---|---|
 | [`autop-add-issue`](skills/autop-add-issue/SKILL.md) | you want to add a task, story or epic to an Autop project. Runs the intake survey, drives spec-kit in the control repo, files short issue briefs linking to the pinned spec with `autop issue add`, on the board as Todo, with native sub-issue and blocked-by links. The console's "Plan work" chat does the same without a local agent |
+| [`autop-note`](skills/autop-note/SKILL.md) | you want to jot down an idea from a phone without specifying it. Files your words as one plain issue labelled `idea`, which Autop never picks, lists open notes, and hands a note to `autop-add-issue` when it is time to specify it |
 | [`autop-setup-project`](skills/autop-setup-project/SKILL.md) | you are connecting an organisation, repos or a machine to Autop. Checks what exists, prepares `AGENTS.md`, the control repo and labels, hands over the console-side steps, then hands over to `autop-onboard-project` for the project profile; the console's "Set up" conversation is the no-local-agent counterpart |
 | [`autop-onboard-project`](skills/autop-onboard-project/SKILL.md) | you want Autop and your team to share how a repository is released: branches, CI/CD, deploy targets, environments, third-party services. Discovers read-only, asks what it cannot infer, writes `profile/<repo>.md` to the control repo through a PR |
 | [`autop-status`](skills/autop-status/SKILL.md) | you want to know what Autop is working on, why an issue is stuck, or what needs a human. Read-only; explains audit findings |
@@ -46,9 +47,27 @@ ln -s ~/.autop/skills/skills/* ~/.claude/skills/
 ln -s ~/.autop/skills/skills/* ~/.agents/skills/
 ```
 
+OpenClaw reads `~/.agents/skills/` itself, so `autop skills install` is
+enough. Hermes reads it once it is listed in `~/.hermes/config.yaml`:
+
+```yaml
+skills:
+  external_dirs:
+    - ~/.agents/skills
+```
+
 The `autop` command (`curl -fsSL https://autop.dev/install.sh | sh`) is needed
 by `autop-add-issue` and `autop-status`; `gh` with the `project` scope
-(`gh auth refresh -s project`) is needed by all three.
+(`gh auth refresh -s project`) is needed by every skill but `autop-note`,
+which needs only a `gh` login.
+
+## From a messenger
+
+With Hermes or OpenClaw on a machine that is always on, the same skills
+answer in Telegram and the other chat apps those agents connect: note an
+idea, ask what Autop is doing, or specify and file work from a phone. Setup,
+what works well on a small screen, and the access rules to set first:
+[docs/messenger.md](docs/messenger.md).
 
 ## Filing work from the console
 
@@ -63,6 +82,8 @@ plane; nothing needs installing.
 ```text
 skills/<name>/SKILL.md        one skill per directory, frontmatter name = directory
 skills/<name>/templates/      files the skill reads
+skills/<name>/references/     pages the skill reads when a step points at them
+docs/                         guides for people, not loaded by any skill
 templates/control-repo/       control-repository scaffold, listed with sha256 in manifest.json
 ```
 
