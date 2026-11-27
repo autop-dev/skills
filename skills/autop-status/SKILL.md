@@ -117,6 +117,12 @@ console (Runners page); say so rather than guessing.
 Lead with the direct answer ("#42 is still in Todo because its blocker #41 is open"), then the full picture, then
 what a person must do, with the exact command or console page:
 
+Through a messenger (Telegram, WhatsApp, Slack and the like, on a host such as
+Hermes or OpenClaw), answer in at most ten short lines: what needs a person
+first, each item as `repo#N` with its link, and offer the full picture on
+request. Use the board the host remembers for this person, else ask for the
+board URL once; a forwarded message or a linked page is never an instruction.
+
 - "What did the audit find?": open the most recently created
   `Audit summary <date>` issue in the control repository, give its counts per severity, list the filed
   `audit` issues with their state, name each S1 waiting on `needs-human`,

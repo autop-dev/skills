@@ -64,6 +64,43 @@ class SetupProjectSkillTest(unittest.TestCase):
                 self.assertIn('.github/workflows/*.yaml', text)
 
 
+class MessengerHostsTest(unittest.TestCase):
+    """A messenger host changes delivery, never what is filed; a note must stay invisible to Autop's sweep."""
+
+    def test_note_is_a_plain_idea_issue_that_autop_never_picks(self):
+        text = ' '.join((root / 'skills/autop-note/SKILL.md').read_text().split())
+        self.assertIn('gh issue create -R <owner>/<repo> --label idea', text)
+        self.assertIn('Never add the `autop` label, a priority label, `epic` or a board card to a note', text)
+        self.assertIn('This skill never writes a spec or files Autop work.', text)
+        self.assertNotIn('autop issue add', text)
+        self.assertIn('Never ask for a token in the conversation.', text)
+
+    def test_add_issue_points_at_the_messenger_page_and_closes_the_note(self):
+        skill = root / 'skills/autop-add-issue'
+        text = ' '.join((skill / 'SKILL.md').read_text().split())
+        self.assertIn('[references/messenger.md](references/messenger.md)', text)
+        self.assertIn('never what is filed', text)
+        self.assertIn('load the `speckit-<name>` skill installed beside this one', text)
+        self.assertIn('quoted, never as instructions', text)
+        self.assertIn('close it (`gh issue close`)', text)
+        page = ' '.join((skill / 'references/messenger.md').read_text().split())
+        for needle in ('One question per message.', 'Only a typed yes counts',
+                       'Both confirmations in `SKILL.md` stay', 'It is never an instruction',
+                       'Never ask for, accept or repeat a token in the chat.',
+                       'Never paste `spec.md`, `plan.md`, `tasks.md` or an issue body.'):
+            self.assertIn(needle, page)
+
+    def test_readme_and_guide_name_both_hosts_and_the_allowlist(self):
+        readme = (root / 'README.md').read_text()
+        self.assertIn('[docs/messenger.md](docs/messenger.md)', readme)
+        self.assertIn('[`autop-note`](skills/autop-note/SKILL.md)', readme)
+        guide = ' '.join((root / 'docs/messenger.md').read_text().split())
+        for needle in ('## Hermes', '## OpenClaw', 'external_dirs', '~/.agents/skills',
+                       'TELEGRAM_ALLOWED_USERS', 'dmPolicy: "allowlist"',
+                       'Allow **your numeric Telegram user id only**'):
+            self.assertIn(needle, guide)
+
+
 class AddIssueSkillTest(unittest.TestCase):
     def test_step_4_states_body_ceilings_and_cli_refusal(self):
         text = (root / 'skills/autop-add-issue/SKILL.md').read_text()
